@@ -1,67 +1,73 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import TaskList from '../components/TaskList'
 import CheckIn from '../components/CheckIn'
 import StreakBar from '../components/StreakBar'
 import { useTasks, useCheckins } from '../hooks/useGoal'
+import { useTheme } from '../hooks/useTheme'
+import { checkAndNotify } from '../hooks/useNotifications'
 
 const TABS = ['Tasks', 'Check-in', 'Log']
 
 export default function GoalDetail({ uid, goal, onBack }) {
   const [tab, setTab] = useState(0)
+  const { c } = useTheme()
   const tasks = useTasks(uid, goal.id)
   const checkins = useCheckins(uid, goal.id)
-
   const streak = calcStreak(checkins)
   const xp = (tasks.filter(t => t.done).length * 10) + (checkins.length * 5)
 
+  useEffect(() => {
+    checkAndNotify(checkins)
+  }, [checkins])
+
   return (
-    <div style={styles.wrap}>
-      <div style={styles.header}>
-        <button style={styles.back} onClick={onBack}>← Back</button>
-        <span style={styles.xp}>{xp} XP</span>
+    <div style={{ padding: '20px 16px 80px', maxWidth: 480, margin: '0 auto' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <button style={{ background: 'none', border: 'none', fontSize: 14, color: c.accent, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }} onClick={onBack}>← Back</button>
+        <span style={{ background: c.accentBg, color: c.accentText, padding: '2px 10px', borderRadius: 99, fontSize: 12, fontWeight: 500 }}>{xp} XP</span>
       </div>
 
-      <div style={styles.goalTitle}>{goal.title}</div>
-      {goal.desc && <div style={styles.goalDesc}>{goal.desc}</div>}
+      <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 4, color: c.text }}>{goal.title}</div>
+      {goal.desc && <div style={{ fontSize: 13, color: c.textMuted, marginBottom: 12 }}>{goal.desc}</div>}
 
-      <div style={styles.streakWrap}>
+      <div style={{ background: c.card, border: `0.5px solid ${c.cardBorder}`, borderRadius: 12, padding: '14px 16px', marginBottom: 14 }}>
         <StreakBar checkins={checkins} />
-        <div style={styles.streakMsg}>
+        <div style={{ fontSize: 12, color: c.textMuted, marginTop: 8 }}>
           {streak > 0 ? `${streak} day streak 🔥` : 'Check in today to start your streak'}
         </div>
       </div>
 
-      <div style={styles.tabs}>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
         {TABS.map((t, i) => (
-          <div key={t} style={{ ...styles.tab, ...(tab === i ? styles.tabOn : {}) }} onClick={() => setTab(i)}>
+          <div key={t} style={{ padding: '7px 14px', borderRadius: 99, fontSize: 13, fontWeight: 500, cursor: 'pointer', border: `0.5px solid ${tab === i ? c.accent : c.cardBorder}`, background: tab === i ? c.accent : c.card, color: tab === i ? '#fff' : c.textMuted }} onClick={() => setTab(i)}>
             {t}
           </div>
         ))}
       </div>
 
-      <div style={styles.card}>
+      <div style={{ background: c.card, border: `0.5px solid ${c.cardBorder}`, borderRadius: 12, padding: '16px 18px' }}>
         {tab === 0 && <TaskList uid={uid} goalId={goal.id} tasks={tasks} />}
         {tab === 1 && <CheckIn uid={uid} goalId={goal.id} checkins={checkins} />}
-        {tab === 2 && <Log checkins={checkins} />}
+        {tab === 2 && <Log checkins={checkins} c={c} />}
       </div>
     </div>
   )
 }
 
-function Log({ checkins }) {
-  if (!checkins.length) return <div style={{ fontSize: 13, color: '#aaa' }}>No check-ins yet</div>
+function Log({ checkins, c }) {
+  if (!checkins.length) return <div style={{ fontSize: 13, color: c.textFaint }}>No check-ins yet</div>
   return (
     <div>
-      <div style={{ fontSize: 11, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 10 }}>History</div>
-      {checkins.map(c => (
-        <div key={c.id} style={{ paddingBottom: 12, marginBottom: 12, borderBottom: '0.5px solid #f0ede6' }}>
+      <div style={{ fontSize: 11, fontWeight: 600, color: c.label, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 10 }}>History</div>
+      {checkins.map(ci => (
+        <div key={ci.id} style={{ paddingBottom: 12, marginBottom: 12, borderBottom: `0.5px solid ${c.cardBorder}` }}>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
-            <span style={{ fontSize: 18 }}>{c.moodEmoji}</span>
-            <span style={{ fontWeight: 500, fontSize: 13 }}>{formatDate(c.date)}</span>
-            <span style={{ fontSize: 11, color: '#aaa' }}>{c.moodLabel}</span>
+            <span style={{ fontSize: 18 }}>{ci.moodEmoji}</span>
+            <span style={{ fontWeight: 500, fontSize: 13, color: c.text }}>{formatDate(ci.date)}</span>
+            <span style={{ fontSize: 11, color: c.textFaint }}>{ci.moodLabel}</span>
           </div>
-          {c.what && <div style={{ fontSize: 13, color: '#555', lineHeight: 1.5 }}>{c.what}</div>}
-          {c.blocker && <div style={{ fontSize: 12, color: '#aaa', marginTop: 3 }}>Blocker: {c.blocker}</div>}
+          {ci.what && <div style={{ fontSize: 13, color: c.textMuted, lineHeight: 1.5 }}>{ci.what}</div>}
+          {ci.blocker && <div style={{ fontSize: 12, color: c.textFaint, marginTop: 3 }}>Blocker: {ci.blocker}</div>}
         </div>
       ))}
     </div>
@@ -85,19 +91,4 @@ function calcStreak(checkins) {
 
 function formatDate(dateStr) {
   return new Date(dateStr).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
-}
-
-const styles = {
-  wrap: { padding: '20px 16px 80px' },
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  back: { background: 'none', border: 'none', fontSize: 14, color: '#534AB7', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 },
-  xp: { background: '#EEEDFE', color: '#534AB7', padding: '2px 10px', borderRadius: 99, fontSize: 12, fontWeight: 500 },
-  goalTitle: { fontSize: 18, fontWeight: 600, marginBottom: 4 },
-  goalDesc: { fontSize: 13, color: '#888', marginBottom: 12 },
-  streakWrap: { background: '#fff', border: '0.5px solid #e8e6de', borderRadius: 12, padding: '14px 16px', marginBottom: 14 },
-  streakMsg: { fontSize: 12, color: '#888', marginTop: 8 },
-  tabs: { display: 'flex', gap: 6, marginBottom: 14 },
-  tab: { padding: '7px 14px', borderRadius: 99, fontSize: 13, fontWeight: 500, cursor: 'pointer', border: '0.5px solid #e0ddd6', background: '#fff', color: '#888' },
-  tabOn: { background: '#534AB7', color: '#fff', borderColor: '#534AB7' },
-  card: { background: '#fff', border: '0.5px solid #e8e6de', borderRadius: 12, padding: '16px 18px' }
 }
