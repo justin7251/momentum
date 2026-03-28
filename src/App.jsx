@@ -1,14 +1,15 @@
-import { useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from './hooks/useAuth'
 import { useGoals } from './hooks/useGoal'
+import { useUser } from './hooks/useUser'
 import { requestPermission } from './hooks/useNotifications'
 import Login from './pages/Login'
 import GoalList from './pages/GoalList'
 import GoalDetail from './pages/GoalDetail'
-import { useState } from 'react'
 
 export default function App() {
   const { user, login, logout } = useAuth()
+  const userData = useUser(user?.uid)
   const goals = useGoals(user?.uid)
   const [selected, setSelected] = useState(null)
 
@@ -28,6 +29,7 @@ export default function App() {
     <GoalDetail
       uid={user.uid}
       goal={selected}
+      userData={userData}
       onBack={() => setSelected(null)}
     />
   )
