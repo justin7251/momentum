@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { addGoal } from '../firebase/db'
 import { useTheme } from '../hooks/useTheme'
 
+const GOAL_EMOJIS = ['🎯', '📚', '💪', '🧠', '🚀', '🎨', '💻', '🌱']
+
 export default function GoalList({ uid, goals, onSelect, onLogout }) {
   const [input, setInput] = useState('')
   const [desc, setDesc] = useState('')
@@ -11,52 +13,51 @@ export default function GoalList({ uid, goals, onSelect, onLogout }) {
   const handleAdd = async () => {
     const v = input.trim()
     if (!v) return
-    await addGoal(uid, { title: v, desc })
+    const emoji = GOAL_EMOJIS[Math.floor(Math.random() * GOAL_EMOJIS.length)]
+    await addGoal(uid, { title: v, desc, emoji })
     setInput(''); setDesc(''); setAdding(false)
   }
 
   return (
-    <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', padding: '0 16px', maxWidth: 480, margin: '0 auto' }}>
+    <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', maxWidth: 480, margin: '0 auto' }}>
 
-      <div style={{ padding: '20px 0 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `0.5px solid ${c.cardBorder}` }}>
-        <span style={{ fontSize: 17, fontWeight: 600, color: c.accent }}>◆ Momentum</span>
+      <div style={{ padding: '20px 16px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontSize: 18, fontWeight: 700, color: c.accent, letterSpacing: '-0.3px' }}>◆ Momentum</span>
         <button style={{ background: 'none', border: 'none', fontSize: 13, color: c.textMuted, cursor: 'pointer', fontFamily: 'inherit' }} onClick={onLogout}>Sign out</button>
       </div>
 
-      <div style={{ flex: 1, paddingTop: 24 }}>
-        {goals.length === 0 ? (
-          <div style={{ textAlign: 'center', paddingTop: 60 }}>
-            <div style={{ fontSize: 36, marginBottom: 12 }}>🎯</div>
-            <div style={{ fontSize: 16, fontWeight: 500, color: c.text, marginBottom: 6 }}>No goals yet</div>
-            <div style={{ fontSize: 13, color: c.textMuted }}>Add your first goal below to get started</div>
+      <div style={{ flex: 1, padding: '8px 16px 16px' }}>
+        {goals.length === 0 && !adding ? (
+          <div style={{ textAlign: 'center', paddingTop: 80 }}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>🎯</div>
+            <div style={{ fontSize: 18, fontWeight: 600, color: c.text, marginBottom: 8 }}>No goals yet</div>
+            <div style={{ fontSize: 14, color: c.textMuted, lineHeight: 1.6 }}>Add your first goal and start building momentum</div>
           </div>
         ) : (
           <div>
-            <div style={{ fontSize: 11, fontWeight: 600, color: c.label, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 12 }}>My goals</div>
+            {goals.length > 0 && (
+              <div style={{ fontSize: 11, fontWeight: 600, color: c.label, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 10 }}>My goals</div>
+            )}
             {goals.map(g => (
-              <div key={g.id} style={{ background: c.card, border: `0.5px solid ${c.cardBorder}`, borderRadius: 14, padding: '16px 18px', marginBottom: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }} onClick={() => onSelect(g)}>
-                <div style={{ width: 40, height: 40, borderRadius: 12, background: c.accentBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>🎯</div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 15, fontWeight: 500, color: c.text, marginBottom: g.desc ? 2 : 0 }}>{g.title}</div>
-                  {g.desc && <div style={{ fontSize: 12, color: c.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.desc}</div>}
+              <div key={g.id} style={{ background: c.card, border: `0.5px solid ${c.cardBorder}`, borderRadius: 14, padding: '14px 16px', marginBottom: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }} onClick={() => onSelect(g)}>
+                <div style={{ width: 42, height: 42, borderRadius: 12, background: c.accentBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
+                  {g.emoji || '🎯'}
                 </div>
-                <div style={{ color: c.textFaint, fontSize: 18, flexShrink: 0 }}>›</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 15, fontWeight: 500, color: c.text }}>{g.title}</div>
+                  {g.desc && <div style={{ fontSize: 12, color: c.textMuted, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.desc}</div>}
+                </div>
+                <div style={{ color: c.textFaint, fontSize: 20 }}>›</div>
               </div>
             ))}
           </div>
         )}
-      </div>
 
-      <div style={{ padding: '16px 0 32px' }}>
-        {!adding ? (
-          <button style={{ width: '100%', background: c.accent, color: '#fff', border: 'none', borderRadius: 12, padding: '14px', fontSize: 15, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }} onClick={() => setAdding(true)}>
-            + Add a goal
-          </button>
-        ) : (
-          <div style={{ background: c.card, border: `0.5px solid ${c.cardBorder}`, borderRadius: 14, padding: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 500, color: c.text, marginBottom: 10 }}>New goal</div>
+        {adding && (
+          <div style={{ background: c.card, border: `0.5px solid ${c.cardBorder}`, borderRadius: 14, padding: 16, marginTop: 8 }}>
+            <div style={{ fontSize: 14, fontWeight: 500, color: c.text, marginBottom: 12 }}>New goal</div>
             <input
-              style={{ width: '100%', border: `0.5px solid ${c.inputBorder}`, borderRadius: 10, padding: '10px 12px', fontSize: 16, background: c.input, outline: 'none', fontFamily: 'inherit', color: c.text, marginBottom: 8, display: 'block' }}
+              style={{ width: '100%', border: `0.5px solid ${c.inputBorder}`, borderRadius: 10, padding: '11px 12px', fontSize: 16, background: c.input, outline: 'none', fontFamily: 'inherit', color: c.text, display: 'block', marginBottom: 8 }}
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleAdd()}
@@ -64,19 +65,27 @@ export default function GoalList({ uid, goals, onSelect, onLogout }) {
               autoFocus
             />
             <textarea
-              style={{ width: '100%', border: `0.5px solid ${c.inputBorder}`, borderRadius: 10, padding: '10px 12px', fontSize: 16, background: c.input, outline: 'none', fontFamily: 'inherit', color: c.text, resize: 'none', lineHeight: 1.5, display: 'block', marginBottom: 10 }}
+              style={{ width: '100%', border: `0.5px solid ${c.inputBorder}`, borderRadius: 10, padding: '11px 12px', fontSize: 16, background: c.input, outline: 'none', fontFamily: 'inherit', color: c.text, resize: 'none', lineHeight: 1.5, display: 'block', marginBottom: 12 }}
               rows={2}
               value={desc}
               onChange={e => setDesc(e.target.value)}
               placeholder="Why does this matter? (optional)"
             />
             <div style={{ display: 'flex', gap: 8 }}>
-              <button style={{ flex: 1, background: c.accent, color: '#fff', border: 'none', borderRadius: 10, padding: '11px', fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }} onClick={handleAdd}>Add goal</button>
-              <button style={{ background: 'none', border: `0.5px solid ${c.cardBorder}`, borderRadius: 10, padding: '11px 16px', fontSize: 14, color: c.textMuted, cursor: 'pointer', fontFamily: 'inherit' }} onClick={() => setAdding(false)}>Cancel</button>
+              <button style={{ flex: 1, background: c.accent, color: '#fff', border: 'none', borderRadius: 10, padding: '12px', fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }} onClick={handleAdd}>Add goal</button>
+              <button style={{ background: 'none', border: `0.5px solid ${c.cardBorder}`, borderRadius: 10, padding: '12px 16px', fontSize: 14, color: c.textMuted, cursor: 'pointer', fontFamily: 'inherit' }} onClick={() => setAdding(false)}>Cancel</button>
             </div>
           </div>
         )}
       </div>
+
+      {!adding && (
+        <div style={{ padding: '12px 16px 36px' }}>
+          <button style={{ width: '100%', background: c.accent, color: '#fff', border: 'none', borderRadius: 14, padding: '15px', fontSize: 15, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '0.1px' }} onClick={() => setAdding(true)}>
+            + Add a goal
+          </button>
+        </div>
+      )}
 
     </div>
   )
