@@ -14,6 +14,14 @@ export const updateTask = (uid, goalId, taskId, data) => updateDoc(doc(db, 'user
 export const deleteTask = (uid, goalId, taskId) => deleteDoc(doc(db, 'users', uid, 'goals', goalId, 'tasks', taskId))
 export const addCheckin = (uid, goalId, data) => addDoc(checkinsRef(uid, goalId), { ...data, createdAt: serverTimestamp() })
 
+export const projectsRef = (uid, goalId) => collection(db, 'users', uid, 'goals', goalId, 'projects')
+export const addProject = (uid, goalId, data) => addDoc(projectsRef(uid, goalId), { ...data, done: false, createdAt: serverTimestamp() })
+export const updateProject = (uid, goalId, projectId, data) => updateDoc(doc(db, 'users', uid, 'goals', goalId, 'projects', projectId), data)
+export const deleteProject = (uid, goalId, projectId) => deleteDoc(doc(db, 'users', uid, 'goals', goalId, 'projects', projectId))
+export const listenProjects = (uid, goalId, cb) =>
+  onSnapshot(query(projectsRef(uid, goalId), orderBy('createdAt', 'desc')), snap =>
+    cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))))
+
 export const listenGoals = (uid, cb) =>
   onSnapshot(query(goalsRef(uid), orderBy('createdAt', 'desc')), snap =>
     cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))))
@@ -25,3 +33,6 @@ export const listenTasks = (uid, goalId, cb) =>
 export const listenCheckins = (uid, goalId, cb) =>
   onSnapshot(query(checkinsRef(uid, goalId), orderBy('createdAt', 'desc')), snap =>
     cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))))
+
+export const rescheduleTask = (uid, goalId, taskId, data) =>
+  updateDoc(doc(db, 'users', uid, 'goals', goalId, 'tasks', taskId), data)

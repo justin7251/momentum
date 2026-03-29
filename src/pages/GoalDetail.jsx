@@ -4,11 +4,12 @@ import CheckIn from '../components/CheckIn'
 import StreakBar from '../components/StreakBar'
 import WeeklyPlan from '../components/WeeklyPlan'
 import WeeklyReview from '../components/WeeklyReview'
-import { useTasks, useCheckins } from '../hooks/useGoal'
+import { useTasks, useCheckins, useProjects } from '../hooks/useGoal'
 import { useTheme } from '../hooks/useTheme'
 import { checkAndNotify } from '../hooks/useNotifications'
+import Projects from '../components/Projects'
 
-const TABS = ['Tasks', 'Plan', 'Check-in', 'Review', 'Log']
+const TABS = ['Tasks', 'Projects', 'Plan', 'Check-in', 'Review', 'Log']
 
 export default function GoalDetail({ uid, goal, userData, onBack }) {
   const [tab, setTab] = useState(0)
@@ -19,6 +20,8 @@ export default function GoalDetail({ uid, goal, userData, onBack }) {
   const xp = (tasks.filter(t => t.done).length * 10) + (checkins.length * 5)
 
   useEffect(() => { checkAndNotify(checkins) }, [checkins])
+
+  const projects = useProjects(uid, goal.id)
 
   return (
     <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', maxWidth: 480, margin: '0 auto' }}>
@@ -50,19 +53,20 @@ export default function GoalDetail({ uid, goal, userData, onBack }) {
 
       <div style={{ flex: 1, padding: '0 16px 40px' }}>
         <div style={{ background: c.card, border: `0.5px solid ${c.cardBorder}`, borderRadius: 14, padding: '16px 18px' }}>
-          {tab === 0 && <TaskList uid={uid} goalId={goal.id} tasks={tasks} />}
-          {tab === 1 && (
+          {tab === 0 && <TaskList uid={uid} goalId={goal.id} tasks={tasks} goal={goal} />}
+          {tab === 1 && <Projects uid={uid} goalId={goal.id} projects={projects} goal={goal} />}
+          {tab === 2 && (
             userData?.isPro
               ? <WeeklyPlan uid={uid} goal={goal} checkins={checkins} />
               : <UpgradePrompt c={c} />
           )}
-          {tab === 2 && <CheckIn uid={uid} goalId={goal.id} checkins={checkins} />}
-          {tab === 3 && (
+          {tab === 3 && <CheckIn uid={uid} goalId={goal.id} checkins={checkins} />}
+          {tab === 4 && (
             userData?.isPro
               ? <WeeklyReview goal={goal} tasks={tasks} checkins={checkins} streak={streak} />
               : <UpgradePrompt c={c} />
           )}
-          {tab === 4 && <Log checkins={checkins} c={c} />}
+          {tab === 5 && <Log checkins={checkins} c={c} />}
         </div>
       </div>
 

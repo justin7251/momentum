@@ -70,3 +70,36 @@ Return ONLY a valid JSON object, no markdown, no explanation:
   const resp = await callAI(prompt)
   return parseJSON(resp)
 }
+
+export async function generateTasks(goal) {
+  const prompt = `You are a productivity coach. User goal: "${goal.title}".${goal.desc ? ` Why it matters: "${goal.desc}".` : ''}${goal.weeks ? ` Timeline: ${goal.weeks} weeks.` : ''}
+
+Generate 7-10 specific actionable tasks to get started. Return ONLY valid JSON, no markdown:
+{"tasks":[{"text":"very specific actionable task","estimatedMins":30,"day":"Mon"}]}
+
+Rules:
+- Tasks must be very specific, not generic (not "study X" but "watch X video and write 3 key points")
+- Mix of different days Mon-Sun
+- estimatedMins between 15-60
+- Start with easiest tasks first
+- Tasks should cover the first week of work toward the goal`
+
+  const resp = await callAI(prompt)
+  return parseJSON(resp)
+}
+
+export async function breakdownProject(title, goal) {
+  const prompt = `You are a productivity coach. 
+Goal: "${goal.title}". Project task: "${title}".
+
+Break this project into 5-8 specific sub-tasks. Return ONLY valid JSON, no markdown:
+{"subtasks":[{"text":"specific sub-task"}]}
+
+Rules:
+- Sub-tasks must be very specific and actionable
+- Order them logically from first to last
+- Each sub-task should take 15-60 minutes`
+
+  const resp = await callAI(prompt)
+  return parseJSON(resp)
+}
