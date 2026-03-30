@@ -12,8 +12,10 @@ export function checkAndNotify(checkins) {
   const alreadyDone = checkins.some(c => c.date === today)
   if (alreadyDone) return
 
-  const hour = new Date().getHours()
-  if (hour < 20) return
+  const savedTime = localStorage.getItem('notifTime') || '20:00'
+  const [h, m] = savedTime.split(':').map(Number)
+  const now = new Date()
+  if (now.getHours() < h || (now.getHours() === h && now.getMinutes() < m)) return
 
   new Notification('Momentum', {
     body: "You haven't checked in today — 2 minutes is all it takes.",

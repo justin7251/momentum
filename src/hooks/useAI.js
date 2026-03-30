@@ -71,18 +71,21 @@ Return ONLY a valid JSON object, no markdown, no explanation:
   return parseJSON(resp)
 }
 
-export async function generateTasks(goal) {
-  const prompt = `You are a productivity coach. User goal: "${goal.title}".${goal.desc ? ` Why it matters: "${goal.desc}".` : ''}${goal.weeks ? ` Timeline: ${goal.weeks} weeks.` : ''}
+export async function generateTasks(goal, userPrompt = '') {
+  const prompt = `You are a productivity coach.
+Goal: "${goal.title}".${goal.desc ? ` Why it matters: "${goal.desc}".` : ''}${goal.weeks ? ` Timeline: ${goal.weeks} weeks.` : ''}
+${userPrompt ? `User wants tasks focused on: "${userPrompt}".` : ''}
 
-Generate 7-10 specific actionable tasks to get started. Return ONLY valid JSON, no markdown:
-{"tasks":[{"text":"very specific actionable task","estimatedMins":30,"day":"Mon"}]}
+Generate exactly 7 specific tasks. Return ONLY valid JSON, no markdown:
+{"tasks":[{"text":"specific task","estimatedMins":30,"day":"Mon"}]}
 
 Rules:
-- Tasks must be very specific, not generic (not "study X" but "watch X video and write 3 key points")
-- Mix of different days Mon-Sun
-- estimatedMins between 15-60
-- Start with easiest tasks first
-- Tasks should cover the first week of work toward the goal`
+- Each task must name a specific resource, tool, or action
+- Bad: "Study grammar" — Good: "Complete Duolingo lesson 1 and write 5 example sentences"
+- Spread across Mon-Sun, one task per day
+- estimatedMins between 20-45
+- Order from easiest to hardest
+- Tasks must be completable in one sitting`
 
   const resp = await callAI(prompt)
   return parseJSON(resp)
@@ -99,6 +102,35 @@ Rules:
 - Sub-tasks must be very specific and actionable
 - Order them logically from first to last
 - Each sub-task should take 15-60 minutes`
+
+  const resp = await callAI(prompt)
+  return parseJSON(resp)
+}
+
+export async function chat(messages, goal, checkins, tasks) {
+  const context = `You are a dedicated productivity coach inside the Momentum app. You have memory of all past conversations with this user about their goal.
+
+Goal: "${goal.title}".${goal.desc ? ` Context: "${goal.desc}".` : ''}
+Tasks done: ${tasks.filter(t => t.done).length}/${tasks.length}.
+Recent check-ins: ${checkins.slice(0, 5).map(c => `${c.date}: ${c.moodLabel}${c.what ? ` — ${c.what}` : ''}${c.blocker ? ` (blocker: ${c.blocker})` : ''}`).join('\n') || 'none'}.
+
+Use the conversation history below to give contextual, personalised responses. Reference past conversations when relevant. Be concise, warm, and direct. Max 3 sentences unless the user asks for more detail.`
+
+  const history = messages
+    .slice(-20)
+    .map(m => `${m.role === 'user' ? 'User' : 'Coach'}: ${m.text}`)
+    .join('\n')
+
+  const resp = await callAI(`${context}\n\nConversation history:\n${history}\n\nCoach:`)
+  return resp.trim()
+}
+
+export async function generateRescueTask(goal, streak, checkins) {
+  const prompt = `User goal: "${goal.title}". They missed a check-in and their ${streak} day streak is at risk.
+Recent mood: ${checkins[0]?.moodLabel || 'unknown'}.
+
+Generate ONE very easy rescue task they can do RIGHT NOW in under 15 minutes to save their streak.
+Return ONLY valid JSON: {"task":"specific task under 10 words","estimatedMins":10,"encouragement":"one motivating sentence"}`
 
   const resp = await callAI(prompt)
   return parseJSON(resp)

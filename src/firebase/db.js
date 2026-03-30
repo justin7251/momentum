@@ -1,7 +1,8 @@
 import { db } from './config'
 import {
   collection, doc, addDoc, updateDoc, deleteDoc,
-  query, where, orderBy, onSnapshot, serverTimestamp
+  query, where, orderBy, onSnapshot, serverTimestamp,
+  getDoc, setDoc
 } from 'firebase/firestore'
 
 export const goalsRef = (uid) => collection(db, 'users', uid, 'goals')
@@ -24,7 +25,7 @@ export const listenProjects = (uid, goalId, cb) =>
 
 export const listenGoals = (uid, cb) =>
   onSnapshot(query(goalsRef(uid), orderBy('createdAt', 'desc')), snap =>
-    cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))))
+    cb(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(g => !g.archived)))
 
 export const listenTasks = (uid, goalId, cb) =>
   onSnapshot(query(tasksRef(uid, goalId), orderBy('createdAt', 'asc')), snap =>
@@ -36,3 +37,13 @@ export const listenCheckins = (uid, goalId, cb) =>
 
 export const rescheduleTask = (uid, goalId, taskId, data) =>
   updateDoc(doc(db, 'users', uid, 'goals', goalId, 'tasks', taskId), data)
+
+export const archiveGoal = (uid, goalId) =>
+  updateDoc(doc(db, 'users', uid, 'goals', goalId), { archived: true })
+
+export const unarchiveGoal = (uid, goalId) =>
+  updateDoc(doc(db, 'users', uid, 'goals', goalId), { archived: false })
+
+export const chatRef = (uid, goalId) => doc(db, 'users', uid, 'goals', goalId, 'chat', 'history')
+export const getChat = (uid, goalId) => getDoc(chatRef(uid, goalId))
+export const saveChat = (uid, goalId, messages) => setDoc(chatRef(uid, goalId), { messages, updatedAt: serverTimestamp() })

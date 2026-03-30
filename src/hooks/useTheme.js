@@ -1,19 +1,45 @@
 import { useState, useEffect } from 'react'
 
+const getSystemDark = () => window.matchMedia('(prefers-color-scheme: dark)').matches
+
+function getInitialDark() {
+  const saved = localStorage.getItem('theme')
+  if (saved === 'dark') return true
+  if (saved === 'light') return false
+  return getSystemDark()
+}
+
 export function useTheme() {
-  const [dark, setDark] = useState(
-    window.matchMedia('(prefers-color-scheme: dark)').matches
-  )
+  const [dark, setDark] = useState(getInitialDark)
 
   useEffect(() => {
+    const handler = () => setDark(getInitialDark())
+    window.addEventListener('theme-changed', handler)
+    return () => window.removeEventListener('theme-changed', handler)
+  }, [])
+
+  useEffect(() => {
+    const saved = localStorage.getItem('theme')
+    if (saved) return
     const mq = window.matchMedia('(prefers-color-scheme: dark)')
     const handler = e => setDark(e.matches)
     mq.addEventListener('change', handler)
     return () => mq.removeEventListener('change', handler)
   }, [])
 
+  const setTheme = (val) => {
+    if (val === 'system') {
+      localStorage.removeItem('theme')
+    } else {
+      localStorage.setItem('theme', val)
+    }
+    window.dispatchEvent(new Event('theme-changed'))
+  }
+
+  const currentTheme = () => localStorage.getItem('theme') || 'system'
+
   return {
-    dark,
+    dark, setTheme, currentTheme,
     c: {
       bg: dark ? '#111113' : '#f5f4f0',
       card: dark ? '#1c1c1f' : '#ffffff',

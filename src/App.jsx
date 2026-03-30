@@ -7,17 +7,24 @@ import Login from './pages/Login'
 import GoalList from './pages/GoalList'
 import GoalDetail from './pages/GoalDetail'
 import Onboarding from './pages/Onboarding'
+import Settings from './pages/Settings'
 
 export default function App() {
   const { user, login, logout } = useAuth()
   const userData = useUser(user?.uid)
   const goals = useGoals(user?.uid)
   const [selected, setSelected] = useState(null)
-  const [onboarded, setOnboarded] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
+  const [onboarded, setOnboarded] = useState(() => localStorage.getItem('onboarded') === 'true')
 
   useEffect(() => {
     if (user) requestPermission()
   }, [user])
+
+  const handleOnboardDone = () => {
+    localStorage.setItem('onboarded', 'true')
+    setOnboarded(true)
+  }
 
   if (user === undefined) return (
     <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#aaa', fontSize: 14 }}>
@@ -27,8 +34,17 @@ export default function App() {
 
   if (!user) return <Login onLogin={login} />
 
-  if (goals !== undefined && goals.length === 0 && !onboarded) return (
-    <Onboarding uid={user.uid} onDone={() => setOnboarded(true)} />
+  if (!onboarded && goals !== undefined && goals.length === 0) return (
+    <Onboarding uid={user.uid} onDone={handleOnboardDone} />
+  )
+
+  if (showSettings) return (
+    <Settings
+      user={user}
+      userData={userData}
+      onBack={() => setShowSettings(false)}
+      onLogout={logout}
+    />
   )
 
   if (selected) return (
@@ -40,5 +56,13 @@ export default function App() {
     />
   )
 
-  return <GoalList uid={user.uid} goals={goals} onSelect={setSelected} onLogout={logout} />
+  return (
+    <GoalList
+      uid={user.uid}
+      goals={goals}
+      onSelect={setSelected}
+      onLogout={logout}
+      onSettings={() => setShowSettings(true)}
+    />
+  )
 }

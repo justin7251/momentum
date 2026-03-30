@@ -8,8 +8,10 @@ import { useTasks, useCheckins, useProjects } from '../hooks/useGoal'
 import { useTheme } from '../hooks/useTheme'
 import { checkAndNotify } from '../hooks/useNotifications'
 import Projects from '../components/Projects'
+import ChatAssistant from '../components/ChatAssistant'
+import StreakRescue from '../components/StreakRescue'
 
-const TABS = ['Tasks', 'Projects', 'Plan', 'Check-in', 'Review', 'Log']
+const TABS = ['Tasks', 'Projects', 'Plan', 'Check-in', 'Review', 'Chat', 'Log']
 
 export default function GoalDetail({ uid, goal, userData, onBack }) {
   const [tab, setTab] = useState(0)
@@ -42,6 +44,7 @@ export default function GoalDetail({ uid, goal, userData, onBack }) {
           </div>
         </div>
 
+        <StreakRescue uid={uid} goal={goal} checkins={checkins} streak={streak} />
         <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 14, scrollbarWidth: 'none' }}>
           {TABS.map((t, i) => (
             <div key={t} style={{ padding: '8px 14px', borderRadius: 99, fontSize: 13, fontWeight: 500, cursor: 'pointer', border: `0.5px solid ${tab === i ? c.accent : c.cardBorder}`, background: tab === i ? c.accent : c.card, color: tab === i ? '#fff' : c.textMuted, whiteSpace: 'nowrap', flexShrink: 0, transition: 'all .15s' }} onClick={() => setTab(i)}>
@@ -66,7 +69,8 @@ export default function GoalDetail({ uid, goal, userData, onBack }) {
               ? <WeeklyReview goal={goal} tasks={tasks} checkins={checkins} streak={streak} />
               : <UpgradePrompt c={c} />
           )}
-          {tab === 5 && <Log checkins={checkins} c={c} />}
+          {tab === 5 && <ChatAssistant uid={uid} goalId={goal.id} goal={goal} checkins={checkins} tasks={tasks} />}
+          {tab === 6 && <Log checkins={checkins} c={c} />}
         </div>
       </div>
 

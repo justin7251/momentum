@@ -28,9 +28,14 @@ export default function Onboarding({ uid, onDone }) {
 
   const handleFinish = async () => {
     setLoading(true)
-    await addGoal(uid, { title: goal, desc: why, emoji, weeks: TIMELINES[timeline].weeks })
-    setLoading(false)
-    onDone()
+    try {
+      await addGoal(uid, { title: goal, desc: why, emoji, weeks: TIMELINES[timeline].weeks })
+      setLoading(false)
+      onDone()
+    } catch(e) {
+      console.error(e)
+      setLoading(false)
+    }
   }
 
   const s = {

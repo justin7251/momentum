@@ -83,15 +83,12 @@ export default function WeeklyPlan({ uid, goal, checkins }) {
     setLoading(false)
   }
 
-  const handleSaveTodayTask = async () => {
-    if (!plan) return
-    const todayTask = plan.days.find(d => d.day === TODAY_DOW)
-    if (!todayTask) return
+  const handleSaveOneTask = async (day) => {
     setLoading(true)
     try {
       await addTask(uid, goal.id, {
-        text: todayTask.task,
-        estimatedMins: todayTask.estimatedMins
+        text: `[${day.day}] ${day.task}`,
+        estimatedMins: day.estimatedMins
       })
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
@@ -139,19 +136,17 @@ export default function WeeklyPlan({ uid, goal, checkins }) {
       <div style={{ marginBottom: 14 }}>
         {plan.days.map((d, i) => (
           <div key={i} style={{ display: 'flex', gap: 10, padding: '9px 0', borderBottom: `0.5px solid ${c.cardBorder}`, alignItems: 'flex-start' }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: d.day === TODAY_DOW ? c.accent : c.accentText, minWidth: 32, paddingTop: 1 }}>{d.day}</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: c.accentText, minWidth: 32, paddingTop: 1 }}>{d.day}</div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, color: d.day === TODAY_DOW ? c.text : c.textMuted, lineHeight: 1.4, fontWeight: d.day === TODAY_DOW ? 500 : 400 }}>{d.task}</div>
+              <div style={{ fontSize: 13, color: c.text, lineHeight: 1.4 }}>{d.task}</div>
               <div style={{ fontSize: 11, color: c.textFaint, marginTop: 2 }}>{d.estimatedMins} min</div>
             </div>
-            {d.day === TODAY_DOW && (
-              <button
-                style={{ background: c.accentBg, color: c.accentText, border: 'none', borderRadius: 6, padding: '4px 8px', fontSize: 11, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}
-                onClick={handleSaveTodayTask}
-              >
-                + Task
-              </button>
-            )}
+            <button
+              style={{ background: c.accentBg, color: c.accentText, border: 'none', borderRadius: 6, padding: '4px 8px', fontSize: 11, fontWeight: 500, cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'inherit', flexShrink: 0 }}
+              onClick={() => handleSaveOneTask(d)}
+            >
+              + Task
+            </button>
           </div>
         ))}
       </div>
