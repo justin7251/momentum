@@ -46,4 +46,5 @@ export const unarchiveGoal = (uid, goalId) =>
 
 export const chatRef = (uid, goalId) => doc(db, 'users', uid, 'goals', goalId, 'chat', 'history')
 export const getChat = (uid, goalId) => getDoc(chatRef(uid, goalId))
-export const saveChat = (uid, goalId, messages) => setDoc(chatRef(uid, goalId), { messages, updatedAt: serverTimestamp() })
+export const saveChat = (uid, goalId, messages, summary = null) =>
+  setDoc(chatRef(uid, goalId), { messages, summary, updatedAt: serverTimestamp() })

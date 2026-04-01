@@ -135,3 +135,16 @@ Return ONLY valid JSON: {"task":"specific task under 10 words","estimatedMins":1
   const resp = await callAI(prompt)
   return parseJSON(resp)
 }
+
+export async function summariseChat(messages) {
+  const history = messages.map(m => `${m.role === 'user' ? 'User' : 'Coach'}: ${m.text}`).join('\n')
+  const prompt = `Summarise this coaching conversation in 3-5 bullet points. Focus on: what the user is working on, key challenges mentioned, advice given, and any commitments made. Be concise.
+
+Conversation:
+${history}
+
+Return ONLY a plain text summary, no JSON, no markdown headers.`
+
+  const resp = await callAI(prompt)
+  return resp.trim()
+}
