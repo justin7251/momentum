@@ -2,7 +2,7 @@ import { db } from './config'
 import {
   collection, doc, addDoc, updateDoc, deleteDoc,
   query, where, orderBy, onSnapshot, serverTimestamp,
-  getDoc, setDoc
+  getDoc, setDoc, getDocs
 } from 'firebase/firestore'
 
 export const goalsRef = (uid) => collection(db, 'users', uid, 'goals')
@@ -48,3 +48,22 @@ export const chatRef = (uid, goalId) => doc(db, 'users', uid, 'goals', goalId, '
 export const getChat = (uid, goalId) => getDoc(chatRef(uid, goalId))
 export const saveChat = (uid, goalId, messages, summary = null) =>
   setDoc(chatRef(uid, goalId), { messages, summary, updatedAt: serverTimestamp() })
+
+
+export const autoCheckin = async (uid, goalId) => {
+  const today = new Date().toISOString().split('T')[0]
+  const ref = collection(db, 'users', uid, 'goals', goalId, 'checkins')
+  const q = query(ref, where('date', '==', today))
+  const snap = await getDocs(q)
+  if (!snap.empty) return
+  await addDoc(ref, {
+    date: today,
+    mood: 2,
+    moodEmoji: '🙂',
+    moodLabel: 'OK',
+    what: 'Completed a task',
+    blocker: '',
+    auto: true,
+    createdAt: serverTimestamp()
+  })
+}

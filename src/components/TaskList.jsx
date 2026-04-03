@@ -6,7 +6,7 @@ import {
   SortableContext, verticalListSortingStrategy, useSortable, arrayMove
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { addTask, updateTask, deleteTask } from '../firebase/db'
+import { addTask, updateTask, deleteTask, autoCheckin } from '../firebase/db'
 import { useTheme } from '../hooks/useTheme'
 import { generateTasks } from '../hooks/useAI'
 
@@ -207,11 +207,13 @@ export default function TaskList({ uid, goalId, tasks, goal }) {
   }
 
   const handleToggle = async (task) => {
+    const nowDone = !task.done
     if (task.recur) {
-      await updateTask(uid, goalId, task.id, { done: !task.done, lastDone: todayStr() })
+      await updateTask(uid, goalId, task.id, { done: nowDone, lastDone: todayStr() })
     } else {
-      await updateTask(uid, goalId, task.id, { done: !task.done })
+      await updateTask(uid, goalId, task.id, { done: nowDone })
     }
+    if (nowDone) await autoCheckin(uid, goalId)
   }
 
   const handleDelete = (taskId) => deleteTask(uid, goalId, taskId)
