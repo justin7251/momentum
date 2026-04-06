@@ -6,11 +6,11 @@ self.addEventListener('install', e => {
 
 self.addEventListener('activate', e => {
   e.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE_VERSION).map(k => caches.delete(k)))
-    ).then(() => clients.claim())
-  )
-})
+    caches.keys()
+      .then(keys => Promise.all(keys.map(k => caches.delete(k))))
+      .then(() => clients.claim())
+  );
+});
 
 self.addEventListener('push', e => {
   const data = e.data?.json() || {}
@@ -29,7 +29,17 @@ self.addEventListener('push', e => {
 })
 
 self.addEventListener('notificationclick', e => {
-  e.notification.close()
-  if (e.action === 'dismiss') return
-  e.waitUntil(clients.openWindow(e.notification.data?.url || '/'))
-})
+  e.notification.close();
+  if (e.action === 'dismiss') return;
+  const url = e.notification.data?.url || '/';
+  e.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+      const existing = list.find(c => c.url.includes(self.location.origin));
+      if (existing) {
+        existing.focus();
+        return existing.navigate(url);
+      }
+      return clients.openWindow(url);
+    })
+  );
+});
