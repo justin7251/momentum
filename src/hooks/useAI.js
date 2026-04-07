@@ -1,3 +1,9 @@
+const GROQ_ENDPOINT = '/api/search-news'
+
+function isNewsRequest(text) {
+  return /news|today|latest|current events|what's happening|headlines/i.test(text)
+}
+
 async function callAI(prompt) {
   const r = await fetch('/api/generate-plan', {
     method: 'POST',
@@ -6,6 +12,17 @@ async function callAI(prompt) {
   })
   const d = await r.json()
   if (!r.ok) throw new Error(d.error || 'API error')
+  return d.text || ''
+}
+
+async function callGroqSearch(query) {
+  const r = await fetch(GROQ_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(query)   // handler reads req.body directly as the search string
+  })
+  const d = await r.json()
+  if (!r.ok) throw new Error(d.error || 'Search API error')
   return d.text || ''
 }
 
@@ -108,6 +125,16 @@ Rules:
 }
 
 export async function chat(messages, goal, checkins, tasks) {
+  const lastUserMsg = [...messages].reverse().find(m => m.role === 'user')
+  const lastText = lastUserMsg?.text || ''
+
+  // --- NEWS FLOW: route to server-side Groq compound-beta ---
+  if (isNewsRequest(lastText)) {
+    const text = await callGroqSearch(lastText)
+    return { text, isNews: true }
+  }
+
+  // --- NORMAL COACHING FLOW ---
   const context = `You are a dedicated productivity coach inside the Momentum app. You have memory of all past conversations with this user about their goal.
 
 Goal: "${goal.title}".${goal.desc ? ` Context: "${goal.desc}".` : ''}
@@ -122,7 +149,7 @@ Use the conversation history below to give contextual, personalised responses. R
     .join('\n')
 
   const resp = await callAI(`${context}\n\nConversation history:\n${history}\n\nCoach:`)
-  return resp.trim()
+  return { text: resp.trim(), isNews: false }
 }
 
 export async function generateRescueTask(goal, streak, checkins) {
