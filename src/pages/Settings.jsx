@@ -3,7 +3,7 @@ import { useTheme } from '../hooks/useTheme'
 import { doc, updateDoc, deleteDoc, collection, getDocs } from 'firebase/firestore'
 import { db, auth } from '../firebase/config'
 import { deleteUser } from 'firebase/auth'
-import { requestPermission } from '../hooks/useNotifications'
+import { requestPermission, disableNotifications } from '../hooks/useNotifications'
 
 const THEME_OPTIONS = [
   { label: 'System', value: 'system' },
@@ -28,9 +28,14 @@ export default function Settings({ user, userData, onBack, onLogout }) {
     setTimeout(() => setSaved(false), 1500)
   }
 
-  const handleEnableNotif = async () => {
-    const granted = await requestPermission()
-    setNotifEnabled(granted)
+  const handleToggleNotif = async () => {
+    if (notifEnabled) {
+      await disableNotifications(user.uid)
+      setNotifEnabled(false)
+    } else {
+      const granted = await requestPermission(user.uid)
+      setNotifEnabled(granted)
+    }
   }
 
   const handleDeleteAccount = async () => {
@@ -100,11 +105,12 @@ export default function Settings({ user, userData, onBack, onLogout }) {
 
         <Section title="Notifications">
           <Row label="Push notifications">
-            {notifEnabled ? (
-              <span style={{ fontSize: 12, color: '#3B6D11', background: '#EAF3DE', padding: '3px 10px', borderRadius: 99, fontWeight: 500 }}>Enabled</span>
-            ) : (
-              <button style={{ background: c.accent, color: '#fff', border: 'none', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }} onClick={handleEnableNotif}>Enable</button>
-            )}
+            <button
+              style={{ background: notifEnabled ? '#EAF3DE' : c.accent, color: notifEnabled ? '#3B6D11' : '#fff', border: 'none', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}
+              onClick={handleToggleNotif}
+            >
+              {notifEnabled ? 'Enabled ✓' : 'Enable'}
+            </button>
           </Row>
           <Row label="Reminder time" last>
             <input

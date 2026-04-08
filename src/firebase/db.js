@@ -49,6 +49,15 @@ export const getChat = (uid, goalId) => getDoc(chatRef(uid, goalId))
 export const saveChat = (uid, goalId, messages, summary = null) =>
   setDoc(chatRef(uid, goalId), { messages, summary, updatedAt: serverTimestamp() })
 
+export const savePushSubscription = (uid, subscription) =>
+  setDoc(doc(db, 'pushSubscriptions', uid), {
+    subscription: JSON.parse(JSON.stringify(subscription)),
+    uid,
+    updatedAt: serverTimestamp()
+  })
+
+export const removePushSubscription = (uid) =>
+  deleteDoc(doc(db, 'pushSubscriptions', uid))
 
 export const autoCheckin = async (uid, goalId) => {
   const today = new Date().toISOString().split('T')[0]

@@ -18,7 +18,7 @@ export default function App() {
   const [onboarded, setOnboarded] = useState(() => localStorage.getItem('onboarded') === 'true')
 
   useEffect(() => {
-    if (user) requestPermission()
+    if (user) requestPermission(user.uid)
   }, [user])
 
   const handleOnboardDone = () => {

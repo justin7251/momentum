@@ -4,17 +4,21 @@ import { getFirestore } from 'firebase-admin/firestore'
 
 webpush.setVapidDetails(
   process.env.VAPID_EMAIL,
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+  process.env.VITE_VAPID_PUBLIC_KEY,
   process.env.VAPID_PRIVATE_KEY
 )
 
 function getAdminDb() {
   if (!getApps().length) {
+    const privateKey = process.env.FIREBASE_PRIVATE_KEY
+      ?.replace(/\\n/g, '\n')
+      ?.replace(/"/g, '')
+
     initializeApp({
       credential: cert({
         projectId: process.env.FIREBASE_PROJECT_ID,
         clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n')
+        privateKey
       })
     })
   }
