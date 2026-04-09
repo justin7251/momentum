@@ -43,6 +43,16 @@ export default async function handler(req, res) {
     await Promise.all(subsSnap.docs.map(async (subDoc) => {
       const { uid, subscription } = subDoc.data()
       try {
+        const userDoc = await db.collection('users').doc(uid).get()
+        const userData = userDoc.data()
+        const notifTime = userData?.notifTime || '20:00'
+        const [h, m] = notifTime.split(':').map(Number)
+        const now = new Date()
+        const userHour = now.getUTCHours()
+        const userMin = now.getUTCMinutes()
+
+        if (userHour !== h || userMin > m + 5) return
+
         const goalsSnap = await db.collection('users').doc(uid).collection('goals').get()
         let checkedInToday = false
 

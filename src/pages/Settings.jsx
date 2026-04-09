@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import { doc, updateDoc, deleteDoc, collection, getDocs } from 'firebase/firestore'
 import { db, auth } from '../firebase/config'
@@ -14,15 +14,26 @@ const THEME_OPTIONS = [
 export default function Settings({ user, userData, onBack, onLogout }) {
   const { c, setTheme, currentTheme } = useTheme()
   const [name, setName] = useState(userData?.name || '')
-  const [notifTime, setNotifTime] = useState(localStorage.getItem('notifTime') || '20:00')
+  const [notifTime, setNotifTime] = useState(userData?.notifTime || localStorage.getItem('notifTime') || '20:00')
   const [notifEnabled, setNotifEnabled] = useState(Notification.permission === 'granted')
   const [saved, setSaved] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
   const initials = name ? name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) : user?.email?.[0]?.toUpperCase() || '?'
 
+  useEffect(() => {
+    if (userData?.notifTime) {
+      setNotifTime(userData.notifTime)
+      localStorage.setItem('notifTime', userData.notifTime)
+    }
+  }, [userData])
+
+
   const handleSaveProfile = async () => {
-    await updateDoc(doc(db, 'users', user.uid), { name })
+    await updateDoc(doc(db, 'users', user.uid), { 
+      name,
+      notifTime 
+    })
     localStorage.setItem('notifTime', notifTime)
     setSaved(true)
     setTimeout(() => setSaved(false), 1500)
