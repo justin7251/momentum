@@ -1,23 +1,25 @@
 import { useState, useRef, useEffect } from 'react'
 import { useTheme } from '../hooks/useTheme'
-import { chat, summariseChat } from '../hooks/useAI'
-import { getChat, saveChat } from '../firebase/db'
+import { chat, extractMemory, summariseChat, defaultMemory } from '../hooks/useAI'
+import { getChat, saveChat, getMemory, saveMemory } from '../firebase/db'
 
 const MAX_MESSAGES = 50
 const SUMMARISE_AFTER = 30
 const KEEP_RECENT = 20
+const EXTRACT_EVERY = 10
 
-const WELCOME = (goal) => `Hi! I'm your coach for "${goal.title}". I remember our past conversations. Ask me anything — how to get unstuck, what to focus on, or how to improve. You can also ask me for today's news!`
+const WELCOME = (goal) => `Hi! I'm your coach for "${goal.title}". I remember our past conversations and learn about you over time. Ask me anything.`
 
 export default function ChatAssistant({ uid, goalId, goal, checkins, tasks }) {
   const { c } = useTheme()
   const [messages, setMessages] = useState(null)
   const [summary, setSummary] = useState(null)
+  const [memory, setMemory] = useState(null)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [loadingHistory, setLoadingHistory] = useState(true)
   const [showClear, setShowClear] = useState(false)
-  const [isSearching, setIsSearching] = useState(false)
+  const messagesSinceExtract = useRef(0)
   const bottomRef = useRef(null)
 
   useEffect(() => { loadHistory() }, [goalId])
@@ -25,13 +27,26 @@ export default function ChatAssistant({ uid, goalId, goal, checkins, tasks }) {
 
   const loadHistory = async () => {
     setLoadingHistory(true)
-    const snap = await getChat(uid, goalId)
-    if (snap.exists()) {
-      const data = snap.data()
-      setMessages(data.messages || [])
-      setSummary(data.summary || null)
-    } else {
-      setMessages([])
+    try {
+      const [chatSnap, memSnap] = await Promise.all([
+        getChat(uid, goalId),
+        getMemory(uid)
+      ])
+      if (chatSnap.exists() && chatSnap.data().messages?.length > 0) {
+        setMessages(chatSnap.data().messages)
+        setSummary(chatSnap.data().summary || null)
+      } else {
+        setMessages([{ role: 'assistant', text: WELCOME(goal), ts: new Date().toISOString() }])
+      }
+      if (memSnap.exists()) {
+        setMemory(memSnap.data())
+      } else {
+        const fresh = defaultMemory(uid)
+        await saveMemory(uid, fresh)
+        setMemory(fresh)
+      }
+    } catch (e) {
+      setMessages([{ role: 'assistant', text: WELCOME(goal), ts: new Date().toISOString() }])
     }
     setLoadingHistory(false)
   }
@@ -44,58 +59,40 @@ export default function ChatAssistant({ uid, goalId, goal, checkins, tasks }) {
     return { messages: toKeep, summary: newSummary }
   }
 
+  const maybeExtractMemory = async (msgs) => {
+    messagesSinceExtract.current += 1
+    if (messagesSinceExtract.current < EXTRACT_EVERY) return
+    messagesSinceExtract.current = 0
+    try {
+      const transcript = msgs.slice(-EXTRACT_EVERY).map(m => `${m.role === 'user' ? 'User' : 'Coach'}: ${m.text}`).join('\n')
+      const updated = await extractMemory(memory || defaultMemory(uid), transcript)
+      setMemory(updated)
+      await saveMemory(uid, updated)
+    } catch (e) {
+      console.error('Memory extraction failed:', e)
+    }
+  }
+
   const handleSend = async () => {
     const v = input.trim()
     if (!v || loading) return
-
     const userMsg = { role: 'user', text: v, ts: new Date().toISOString() }
     const updated = [...messages, userMsg]
     setMessages(updated)
     setInput('')
     setLoading(true)
-
-    // Detect news request to show "Searching the web..." indicator
-    const isNews = /news|today|latest|current events|what's happening|headlines/i.test(v)
-    if (isNews) setIsSearching(true)
-
     try {
-      // chat() now handles both normal and news flows internally
-      // It returns { text: string } in both cases
-      const response = await chat(updated, goal, checkins, tasks)
-
-      let rawText = response.text;
-
-      let cleanText = rawText.replace(/(\*\*How I gathered information\*\*[\s\S]*?---)/gi, '');
-      cleanText = cleanText.replace(/### Quick Takeaways/gi, '');
-      cleanText = cleanText.replace(/🔍 Live news/gi, '');
-
-      const assistantMsg = {
-        role: 'assistant',
-        text: cleanText,
-        ts: new Date().toISOString(),
-        isNews: isNews  // flag so we can style news replies differently
-      }
-
-      const nextMessages = [...updated, assistantMsg]
-
-      // Compress history if needed
-      const { messages: compressed, summary: newSummary } = await compressIfNeeded(nextMessages)
+      const response = await chat(updated, goal, checkins, tasks, memory)
+      const assistantMsg = { role: 'assistant', text: response.text, ts: new Date().toISOString() }
+      const withReply = [...updated, assistantMsg]
+      const { messages: compressed, summary: newSummary } = await compressIfNeeded(withReply)
       setMessages(compressed)
       setSummary(newSummary)
-
-      // Persist to Firebase
       await saveChat(uid, goalId, compressed, newSummary)
+      await maybeExtractMemory(withReply)
     } catch (e) {
-      console.error('Chat error:', e)
-      const errMsg = {
-        role: 'assistant',
-        text: "Sorry, I ran into an issue. Please try again.",
-        ts: new Date().toISOString()
-      }
-      setMessages(prev => [...prev, errMsg])
+      setMessages(prev => [...prev, { role: 'assistant', text: 'Something went wrong. Try again.', ts: new Date().toISOString() }])
     }
-
-    setIsSearching(false)
     setLoading(false)
   }
 
@@ -107,90 +104,22 @@ export default function ChatAssistant({ uid, goalId, goal, checkins, tasks }) {
     await saveChat(uid, goalId, fresh, null)
   }
 
-  const MessageContent = ({ m, c }) => {
-    if (m.isNews) {
-      return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {/* Header */}
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: 8,
-            borderBottom: `1px solid rgba(255,255,255,0.1)`,
-            paddingBottom: '8px'
-          }}>
-            <span style={{ fontSize: '14px' }}>📡</span>
-            <div style={{ 
-              fontSize: 10, 
-              fontWeight: 800, 
-              color: c.accent, 
-              textTransform: 'uppercase', 
-              letterSpacing: '0.1em' 
-            }}>
-              Live Intelligence Feed
-            </div>
-          </div>
-
-          {/* News Items */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {m.text.split('\n')
-              .filter(t => t.trim() && t.length > 5) // Filter out empty or tiny lines
-              .map((line, idx) => {
-                // Clean up markdown asterisks and numbers
-                const cleanLine = line.replace(/[\*\#]/g, '').replace(/^\d+\.\s*/, '').trim();
-                
-                // Split into Bold Title and Body if a colon exists
-                const [title, ...rest] = cleanLine.split(':');
-                const body = rest.join(':');
-
-                return (
-                  <div key={idx} style={{ position: 'relative', paddingLeft: '12px' }}>
-                    {/* Vertical Accent Line */}
-                    <div style={{ 
-                      position: 'absolute', 
-                      left: 0, 
-                      top: '4px', 
-                      bottom: '4px', 
-                      width: '2px', 
-                      background: c.accent, 
-                      opacity: 0.6,
-                      borderRadius: '2px'
-                    }} />
-                    
-                    {body ? (
-                      <>
-                        <div style={{ fontWeight: '700', fontSize: '13px', color: '#fff', marginBottom: '2px' }}>
-                          {title}
-                        </div>
-                        <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.7)', lineHeight: '1.5' }}>
-                          {body}
-                        </div>
-                      </>
-                    ) : (
-                      <div style={{ fontSize: '13px', color: '#fff', lineHeight: '1.5' }}>
-                        {cleanLine}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-          </div>
-        </div>
-      );
-    }
-    return <span style={{ whiteSpace: 'pre-wrap' }}>{m.text}</span>;
-  };
-
   if (loadingHistory) return (
     <div style={{ textAlign: 'center', padding: '40px 0', fontSize: 13, color: c.textFaint }}>Loading...</div>
   )
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 440 }}>
-
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <div style={{ fontSize: 11, fontWeight: 600, color: c.label, textTransform: 'uppercase', letterSpacing: '.06em' }}>
-          AI Coach · {Math.max(0, messages.length - 1)} messages
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: c.label, textTransform: 'uppercase', letterSpacing: '.06em' }}>
+            AI Coach · {messages.length - 1} messages
+          </div>
+          {memory?.sessionHistory?.length > 0 && (
+            <span style={{ fontSize: 10, background: c.accentBg, color: c.accentText, padding: '1px 6px', borderRadius: 4, fontWeight: 500 }}>
+              {memory.sessionHistory.length} sessions
+            </span>
+          )}
         </div>
         <button
           style={{ background: 'none', border: `0.5px solid ${c.cardBorder}`, borderRadius: 6, padding: '3px 10px', fontSize: 11, color: c.textMuted, cursor: 'pointer', fontFamily: 'inherit' }}
@@ -202,26 +131,21 @@ export default function ChatAssistant({ uid, goalId, goal, checkins, tasks }) {
 
       {showClear && (
         <div style={{ background: '#FCEBEB', border: '0.5px solid #F7C1C1', borderRadius: 10, padding: '12px 14px', marginBottom: 10 }}>
-          <div style={{ fontSize: 13, color: '#A32D2D', marginBottom: 10 }}>Clear all conversation history? This cannot be undone.</div>
+          <div style={{ fontSize: 13, color: '#A32D2D', marginBottom: 10 }}>Clear conversation history? Memory about you is kept separately.</div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button style={{ flex: 1, background: '#A32D2D', color: '#fff', border: 'none', borderRadius: 8, padding: '8px', fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }} onClick={handleClear}>Clear history</button>
-            <button style={{ background: 'none', border: `0.5px solid #F7C1C1`, borderRadius: 8, padding: '8px 14px', fontSize: 13, color: '#A32D2D', cursor: 'pointer', fontFamily: 'inherit' }} onClick={() => setShowClear(false)}>Cancel</button>
+            <button style={{ flex: 1, background: '#A32D2D', color: '#fff', border: 'none', borderRadius: 8, padding: '8px', fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }} onClick={handleClear}>Clear chat</button>
+            <button style={{ background: 'none', border: '0.5px solid #F7C1C1', borderRadius: 8, padding: '8px 14px', fontSize: 13, color: '#A32D2D', cursor: 'pointer', fontFamily: 'inherit' }} onClick={() => setShowClear(false)}>Cancel</button>
           </div>
         </div>
       )}
 
       {summary && (
         <div style={{ background: c.streak, border: `0.5px solid ${c.cardBorder}`, borderRadius: 10, padding: '10px 12px', marginBottom: 10, fontSize: 12, color: c.textMuted, lineHeight: 1.5 }}>
-          <span style={{ fontWeight: 600, color: c.textMuted }}>Past context: </span>{summary}
+          <span style={{ fontWeight: 600, color: c.textMuted }}>Earlier: </span>{summary}
         </div>
       )}
 
       <div style={{ flex: 1, overflowY: 'auto', marginBottom: 12 }}>
-        {messages.length === 0 && (
-          <div style={{ fontSize: 13, color: c.textMuted, padding: '10px 0', lineHeight: 1.6 }}>
-            {WELCOME(goal)}
-          </div>
-        )}
         {messages.map((m, i) => (
           <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 10 }}>
             <div style={{
@@ -229,27 +153,19 @@ export default function ChatAssistant({ uid, goalId, goal, checkins, tasks }) {
               borderRadius: m.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
               background: m.role === 'user' ? c.accent : c.accentBg,
               color: m.role === 'user' ? '#fff' : c.accentText,
-              fontSize: 13, lineHeight: 1.6,
-              // Give news replies a subtle left border accent
-              borderLeft: m.isNews ? `3px solid ${c.accent}` : undefined
+              fontSize: 13, lineHeight: 1.6
             }}>
-              {m.isNews && (
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', opacity: 0.5, marginBottom: 4 }}>
-                  🔍 Live news
-                </div>
-              )}
-              <MessageContent m={m} c={c} />
+              {m.text}
               <div style={{ fontSize: 10, opacity: 0.4, marginTop: 4 }}>
                 {m.ts ? new Date(m.ts).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ''}
               </div>
             </div>
           </div>
         ))}
-
         {loading && (
           <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 10 }}>
             <div style={{ padding: '10px 13px', borderRadius: '14px 14px 14px 4px', background: c.accentBg, color: c.accentText, fontSize: 13 }}>
-              {isSearching ? '🔍 Searching the web...' : 'Thinking...'}
+              Thinking...
             </div>
           </div>
         )}
@@ -262,7 +178,7 @@ export default function ChatAssistant({ uid, goalId, goal, checkins, tasks }) {
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && handleSend()}
-          placeholder="Ask your coach or 'get me news for today'..."
+          placeholder="Ask your coach..."
           disabled={loading}
         />
         <button

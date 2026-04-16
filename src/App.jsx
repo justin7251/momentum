@@ -3,6 +3,7 @@ import { useAuth } from './hooks/useAuth'
 import { useGoals } from './hooks/useGoal'
 import { useUser } from './hooks/useUser'
 import { requestPermission } from './hooks/useNotifications'
+import { useOnlineStatus } from './hooks/useOnlineStatus'
 import Login from './pages/Login'
 import GoalList from './pages/GoalList'
 import GoalDetail from './pages/GoalDetail'
@@ -10,6 +11,7 @@ import Onboarding from './pages/Onboarding'
 import Settings from './pages/Settings'
 
 export default function App() {
+  const online = useOnlineStatus()
   const { user, login, logout } = useAuth()
   const userData = useUser(user?.uid)
   const goals = useGoals(user?.uid)
@@ -38,31 +40,46 @@ export default function App() {
     <Onboarding uid={user.uid} onDone={handleOnboardDone} />
   )
 
-  if (showSettings) return (
-    <Settings
-      user={user}
-      userData={userData}
-      onBack={() => setShowSettings(false)}
-      onLogout={logout}
-    />
-  )
-
-  if (selected) return (
-    <GoalDetail
-      uid={user.uid}
-      goal={selected}
-      userData={userData}
-      onBack={() => setSelected(null)}
-    />
-  )
+  const content = (() => {
+    if (showSettings) return (
+      <Settings
+        user={user}
+        userData={userData}
+        onBack={() => setShowSettings(false)}
+        onLogout={logout}
+      />
+    )
+    if (selected) return (
+      <GoalDetail
+        uid={user.uid}
+        goal={selected}
+        userData={userData}
+        onBack={() => setSelected(null)}
+      />
+    )
+    return (
+      <GoalList
+        uid={user.uid}
+        goals={goals}
+        onSelect={setSelected}
+        onLogout={logout}
+        onSettings={() => setShowSettings(true)}
+      />
+    )
+  })()
 
   return (
-    <GoalList
-      uid={user.uid}
-      goals={goals}
-      onSelect={setSelected}
-      onLogout={logout}
-      onSettings={() => setShowSettings(true)}
-    />
+    <>
+      {!online && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
+          background: '#854F0B', color: '#fff', textAlign: 'center',
+          padding: '8px 16px', fontSize: 13, fontWeight: 500
+        }}>
+          Offline — changes will sync when you reconnect
+        </div>
+      )}
+      {content}
+    </>
   )
 }
