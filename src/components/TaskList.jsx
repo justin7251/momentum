@@ -6,21 +6,18 @@ import {
   SortableContext, verticalListSortingStrategy, useSortable, arrayMove
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { addTask, updateTask, deleteTask, autoCheckin } from '../firebase/db'
+import { addTask, updateTask, deleteTask } from '../firebase/db'
 import { useTheme } from '../hooks/useTheme'
 import { generateTasks } from '../hooks/useAI'
+import { useOnlineStatus } from '../hooks/useOnlineStatus'
+import { autoCheckin } from '../firebase/db'
 
-const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
-const DAY_ORDER = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const DAY_ORDER = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const PRIORITIES = [
   { label: 'High', color: '#A32D2D', bg: '#FCEBEB', border: '#F7C1C1' },
   { label: 'Med', color: '#854F0B', bg: '#FAEEDA', border: '#FAC775' },
   { label: 'Low', color: '#3B6D11', bg: '#EAF3DE', border: '#C0DD97' },
-]
-const RECUR_OPTIONS = [
-  { label: 'None', value: null },
-  { label: 'Daily', value: 'daily' },
-  { label: 'Weekly', value: 'weekly' },
 ]
 const TASK_TABS = ['Today', 'All', 'Missed', 'Done']
 
@@ -35,8 +32,8 @@ function todayStr() { return new Date().toISOString().split('T')[0] }
 
 function isPastDay(day) {
   if (!day) return false
-  const todayIdx = new Date().getDay()
   const dayMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }
+  const todayIdx = new Date().getDay()
   const dayIdx = dayMap[day]
   if (dayIdx === undefined) return false
   return dayIdx < todayIdx
@@ -195,6 +192,7 @@ export default function TaskList({ uid, goalId, tasks, goal }) {
   const [showGenerate, setShowGenerate] = useState(false)
   const [generatePrompt, setGeneratePrompt] = useState('')
   const { c } = useTheme()
+  const online = useOnlineStatus()
   const today = todayDow()
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
@@ -220,6 +218,7 @@ export default function TaskList({ uid, goalId, tasks, goal }) {
   const handleExpand = (id) => setExpanded(expanded === id ? null : id)
 
   const handleGenerate = async () => {
+    if (!online) return
     setGenerating(true)
     try {
       const data = await generateTasks(goal, generatePrompt)
@@ -245,21 +244,19 @@ export default function TaskList({ uid, goalId, tasks, goal }) {
     setOrderedIds(arrayMove(orderedTasks, oldIndex, newIndex).map(t => t.id))
   }
 
-  const processedTasks = tasks
-
-  const todayTasks = processedTasks.filter(t => {
+  const todayTasks = tasks.filter(t => {
     const { day } = parseTaskText(t.text)
     return !t.done && (day === today || day === null)
   })
-  const allTasks = processedTasks.filter(t => {
+  const allTasks = tasks.filter(t => {
     const { day } = parseTaskText(t.text)
     return !t.done && !(day && isPastDay(day))
   })
-  const missedTasks = processedTasks.filter(t => {
+  const missedTasks = tasks.filter(t => {
     const { day } = parseTaskText(t.text)
     return !t.done && day && isPastDay(day)
   })
-  const doneTasks = processedTasks.filter(t => t.done && !isOlderThan7Days(t.createdAt))
+  const doneTasks = tasks.filter(t => t.done && !isOlderThan7Days(t.createdAt))
 
   const counts = [todayTasks, allTasks, missedTasks, doneTasks].map(a => a.length)
   const visibleTasks = [todayTasks, allTasks, missedTasks, doneTasks][activeTab]
@@ -278,7 +275,8 @@ export default function TaskList({ uid, goalId, tasks, goal }) {
     <div>
       <div style={{ display: 'flex', gap: 4, marginBottom: 14, overflowX: 'auto', scrollbarWidth: 'none' }}>
         {TASK_TABS.map((t, i) => (
-          <button key={t} style={{ padding: '5px 11px', borderRadius: 99, fontSize: 12, fontWeight: 500, cursor: 'pointer', border: `0.5px solid ${activeTab === i ? c.accent : c.cardBorder}`, background: activeTab === i ? c.accent : 'transparent', color: activeTab === i ? '#fff' : i === 2 && counts[2] > 0 ? '#A32D2D' : c.textMuted, fontFamily: 'inherit', transition: 'all .15s', whiteSpace: 'nowrap', flexShrink: 0 }} onClick={() => { setActiveTab(i); setOrderedIds(null) }}>
+          <button key={t} style={{ padding: '5px 11px', borderRadius: 99, fontSize: 12, fontWeight: 500, cursor: 'pointer', border: `0.5px solid ${activeTab === i ? c.accent : c.cardBorder}`, background: activeTab === i ? c.accent : 'transparent', color: activeTab === i ? '#fff' : i === 2 && counts[2] > 0 ? '#A32D2D' : c.textMuted, fontFamily: 'inherit', transition: 'all .15s', whiteSpace: 'nowrap', flexShrink: 0 }}
+            onClick={() => { setActiveTab(i); setOrderedIds(null) }}>
             {t} ({counts[i]})
           </button>
         ))}
@@ -325,11 +323,11 @@ export default function TaskList({ uid, goalId, tasks, goal }) {
               />
               <div style={{ display: 'flex', gap: 8 }}>
                 <button
-                  style={{ flex: 1, background: generating ? c.inputBorder : c.accent, color: generating ? c.textFaint : '#fff', border: 'none', borderRadius: 8, padding: '9px', fontSize: 13, fontWeight: 500, cursor: generating ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
+                  style={{ flex: 1, background: generating || !online ? c.inputBorder : c.accent, color: generating || !online ? c.textFaint : '#fff', border: 'none', borderRadius: 8, padding: '9px', fontSize: 13, fontWeight: 500, cursor: generating || !online ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
                   onClick={handleGenerate}
-                  disabled={generating}
+                  disabled={generating || !online}
                 >
-                  {generating ? 'Generating...' : 'Generate ✦'}
+                  {!online ? 'Unavailable offline' : generating ? 'Generating...' : 'Generate ✦'}
                 </button>
                 <button
                   style={{ background: 'none', border: `0.5px solid ${c.cardBorder}`, borderRadius: 8, padding: '9px 14px', fontSize: 13, color: c.textMuted, cursor: 'pointer', fontFamily: 'inherit' }}
@@ -341,10 +339,10 @@ export default function TaskList({ uid, goalId, tasks, goal }) {
             </div>
           ) : (
             <button
-              style={{ marginTop: 10, width: '100%', background: 'none', border: `0.5px solid ${c.cardBorder}`, borderRadius: 8, padding: '8px', fontSize: 13, color: c.textMuted, cursor: 'pointer', fontFamily: 'inherit' }}
-              onClick={() => setShowGenerate(true)}
+              style={{ marginTop: 10, width: '100%', background: 'none', border: `0.5px solid ${c.cardBorder}`, borderRadius: 8, padding: '8px', fontSize: 13, color: online ? c.textMuted : c.textFaint, cursor: online ? 'pointer' : 'not-allowed', fontFamily: 'inherit', opacity: online ? 1 : 0.5 }}
+              onClick={() => online && setShowGenerate(true)}
             >
-              Generate tasks with AI ✦
+              {online ? 'Generate tasks with AI ✦' : 'AI unavailable offline'}
             </button>
           )}
 
