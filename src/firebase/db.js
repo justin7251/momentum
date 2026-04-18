@@ -76,3 +76,7 @@ export const autoCheckin = async (uid, goalId) => {
     createdAt: serverTimestamp()
   })
 }
+
+export const memoryRef = (uid) => doc(db, 'users', uid, 'coaching', 'memory')
+export const getMemory = (uid) => getDoc(memoryRef(uid))
+export const saveMemory = (uid, memory) => setDoc(memoryRef(uid), memory)
