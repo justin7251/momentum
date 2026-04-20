@@ -41,7 +41,7 @@ function GoalCard({ goal, onSelect, onArchive, c }) {
   )
 }
 
-export default function GoalList({ uid, goals, onSelect, onLogout, onSettings }) {
+export default function GoalList({ uid, goals, onSelect, onLogout, onSettings, onCalendar }) {
   const [input, setInput] = useState('')
   const [desc, setDesc] = useState('')
   const [adding, setAdding] = useState(false)
@@ -64,7 +64,10 @@ export default function GoalList({ uid, goals, onSelect, onLogout, onSettings })
     <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', maxWidth: 480, margin: '0 auto' }}>
       <div style={{ padding: '20px 16px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ fontSize: 18, fontWeight: 700, color: c.accent, letterSpacing: '-0.3px' }}>◆ Momentum</span>
-        <button style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: c.textMuted, padding: 4 }} onClick={onSettings}>⚙</button>
+        <div style={{ display: 'flex', gap: 4 }}>
+          <button style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: c.textMuted, padding: 4 }} onClick={onCalendar}>📅</button>
+          <button style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: c.textMuted, padding: 4 }} onClick={onSettings}>⚙</button>
+        </div>
       </div>
 
       <div style={{ flex: 1, padding: '8px 16px 16px' }}>
