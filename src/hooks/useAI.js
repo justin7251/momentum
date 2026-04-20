@@ -1,3 +1,12 @@
+const MINDSET = `You coach using these proven principles:
+1. Three-Wins Rule: Every recommendation must benefit the user, advance their goal, AND produce a measurable result. Never suggest effort with no return.
+2. Valley vs Dead End: Distinguish between hard-but-progressing (encourage) and fundamentally broken (challenge to pivot). Grit alone does not fix a broken system.
+3. Accumulable Assets: Push toward skills and habits that compound over time, not one-off tasks that reset to zero.
+4. Trend + People + Return: When advising, consider — is this gaining momentum? Who can help? Is it actually working?
+5. High Resilience Trap: If someone has been stuck for weeks with no progress, challenge them directly. High tolerance for stagnation is a liability, not a virtue.`
+
+const COACHING_STYLE = `Be direct, warm, and specific. No generic motivation. No fluff. Challenge comfortable stagnation. Celebrate real wins. Reference past context when relevant.`
+
 async function callAI(prompt, tools = []) {
   const r = await fetch('/api/generate-plan', {
     method: 'POST',
@@ -37,14 +46,20 @@ function formatMemoryForPrompt(memory) {
   if (memory.profile?.name) lines.push(`Name: ${memory.profile.name}`)
   if (memory.profile?.motivationStyle) lines.push(`Motivation style: ${memory.profile.motivationStyle}`)
   if (memory.profile?.communicationStyle) lines.push(`Communication style: ${memory.profile.communicationStyle}`)
-  if (memory.goals?.length) lines.push(`Current goals: ${memory.goals.map(g => `${g.title} — ${g.status}${g.progress ? ', ' + g.progress : ''}`).join('; ')}`)
-  if (memory.patterns?.struggles?.length) lines.push(`Known struggles: ${memory.patterns.struggles.join(', ')}`)
+  if (memory.goals?.length) {
+    lines.push(`Goals: ${memory.goals.map(g => `${g.title} (${g.status})${g.progress ? ' — ' + g.progress : ''}${g.blockers?.length ? ', blockers: ' + g.blockers.join(', ') : ''}`).join('; ')}`)
+  }
+  if (memory.patterns?.strengths?.length) lines.push(`Strengths: ${memory.patterns.strengths.join(', ')}`)
+  if (memory.patterns?.struggles?.length) lines.push(`Struggles: ${memory.patterns.struggles.join(', ')}`)
   if (memory.patterns?.whatWorks?.length) lines.push(`What works: ${memory.patterns.whatWorks.join(', ')}`)
-  if (memory.recentWins?.length) lines.push(`Recent wins: ${memory.recentWins.slice(0, 3).map(w => `${w.description} (${w.date})`).join(', ')}`)
-  if (memory.openLoops?.length) lines.push(`Open loops: ${memory.openLoops.join('; ')}`)
+  if (memory.patterns?.whatDoesnt?.length) lines.push(`What doesn't work: ${memory.patterns.whatDoesnt.join(', ')}`)
+  if (memory.recentWins?.length) {
+    lines.push(`Recent wins: ${memory.recentWins.slice(0, 3).map(w => `${w.description} (${w.date})`).join(', ')}`)
+  }
+  if (memory.openLoops?.length) lines.push(`Open loops (follow up on these): ${memory.openLoops.join('; ')}`)
   if (memory.sessionHistory?.length) {
     const last = memory.sessionHistory[memory.sessionHistory.length - 1]
-    lines.push(`Last session: ${last.date} — ${last.summary}`)
+    lines.push(`Last session (${last.date}): ${last.summary}${last.commitments?.length ? ' — commitments: ' + last.commitments.join(', ') : ''}`)
   }
   return lines.join('\n')
 }
@@ -64,32 +79,42 @@ export function defaultMemory(uid) {
 
 export async function generateWeeklyPlan(goal, weekNum, checkins) {
   const recentMoods = checkins.slice(0, 5).map(c => c.moodLabel).join(', ')
-  const prompt = `You are a productivity coach. User goal: "${goal.title}".${goal.desc ? ` Context: "${goal.desc}".` : ''}
-Week number: ${weekNum}. Recent moods: ${recentMoods || 'none yet'}.
+  const moodTrend = checkins.slice(0, 3).every(c => c.mood <= 1) ? 'consistently low — simplify tasks' : 'acceptable'
 
-Return ONLY a valid JSON object, no markdown, no explanation:
-{"weekTheme":"short theme name","days":[{"day":"Mon","task":"very specific actionable task under 15 words","estimatedMins":30},{"day":"Tue","task":"...","estimatedMins":25},{"day":"Wed","task":"...","estimatedMins":30},{"day":"Thu","task":"...","estimatedMins":20},{"day":"Fri","task":"...","estimatedMins":30},{"day":"Sat","task":"...","estimatedMins":25},{"day":"Sun","task":"...","estimatedMins":20}]}
+  const prompt = `You are a productivity coach building a weekly plan.
+
+Goal: "${goal.title}"${goal.desc ? `. Why it matters: "${goal.desc}"` : ''}.
+Week: ${weekNum}. Recent moods: ${recentMoods || 'none yet'} (trend: ${moodTrend}).
+
+Return ONLY valid JSON, no markdown:
+{"weekTheme":"short motivating theme","days":[{"day":"Mon","task":"specific actionable task naming exact resource or action","estimatedMins":30},{"day":"Tue","task":"...","estimatedMins":25},{"day":"Wed","task":"...","estimatedMins":30},{"day":"Thu","task":"...","estimatedMins":20},{"day":"Fri","task":"...","estimatedMins":30},{"day":"Sat","task":"...","estimatedMins":25},{"day":"Sun","task":"...","estimatedMins":20}]}
 
 Rules:
-- Include all 7 days Mon through Sun
-- Tasks must be very specific and actionable
-- Difficulty increases with week number
-- If recent moods are low, make tasks shorter and simpler
-- estimatedMins between 15 and 60`
+- All 7 days Mon-Sun
+- Each task names a specific resource, tool, or action (not vague verbs)
+- Bad: "Practice speaking" — Good: "Record a 2-min voice memo in the target language and replay it"
+- Difficulty ramps up with week number
+- If mood trend is low: tasks under 20 min, very easy wins
+- estimatedMins between 15-60
+- Week theme should reflect the skill being built this week`
 
   const resp = await callAI(prompt)
   return parseJSON(resp)
 }
 
 export async function autoAdjustPlan(goal, plan, checkins) {
-  const recentMoods = checkins.slice(0, 3).map(c => c.moodLabel).join(', ') || 'none yet'
-  const prompt = `User goal: "${goal.title}". Current week theme: "${plan.weekTheme}".
+  const recentMoods = checkins.slice(0, 3).map(c => `${c.moodLabel}${c.blocker ? ' (blocker: ' + c.blocker + ')' : ''}`).join(', ') || 'none'
+
+  const prompt = `You are a productivity coach adjusting a plan because the user is struggling.
+
+Goal: "${goal.title}". Week theme: "${plan.weekTheme}".
 Current tasks: ${JSON.stringify(plan.days.map(d => d.task))}.
 Recent moods: ${recentMoods}.
-Simplify and adjust the plan to be more achievable.
 
-Return ONLY a valid JSON object, no markdown, no explanation:
-{"weekTheme":"${plan.weekTheme}","days":[{"day":"Mon","task":"simpler specific task","estimatedMins":20},{"day":"Tue","task":"...","estimatedMins":15},{"day":"Wed","task":"...","estimatedMins":20},{"day":"Thu","task":"...","estimatedMins":15},{"day":"Fri","task":"...","estimatedMins":20},{"day":"Sat","task":"...","estimatedMins":15},{"day":"Sun","task":"...","estimatedMins":15}],"adjustNote":"one sentence explaining why tasks were simplified"}`
+Apply the Valley vs Dead End principle: if they're in a valley, simplify tasks to rebuild momentum. Keep the goal direction but reduce resistance.
+
+Return ONLY valid JSON, no markdown:
+{"weekTheme":"${plan.weekTheme}","days":[{"day":"Mon","task":"easier specific task","estimatedMins":15},{"day":"Tue","task":"...","estimatedMins":15},{"day":"Wed","task":"...","estimatedMins":20},{"day":"Thu","task":"...","estimatedMins":15},{"day":"Fri","task":"...","estimatedMins":20},{"day":"Sat","task":"...","estimatedMins":15},{"day":"Sun","task":"...","estimatedMins":15}],"adjustNote":"one sentence explaining the adjustment using Valley/Dead End framing"}`
 
   const resp = await callAI(prompt)
   return parseJSON(resp)
@@ -99,65 +124,86 @@ export async function generateWeeklyReview(goal, tasks, checkins, streak) {
   const totalTasks = tasks.length
   const doneTasks = tasks.filter(t => t.done).length
   const pct = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0
-  const moodSummary = checkins.slice(0, 7).map(c => `${c.date}: ${c.moodLabel}${c.what ? ` — ${c.what}` : ''}${c.blocker ? ` (blocker: ${c.blocker})` : ''}`).join('\n')
+  const moodSummary = checkins.slice(0, 7).map(c =>
+    `${c.date}: ${c.moodLabel}${c.what ? ' — ' + c.what : ''}${c.blocker ? ' (blocker: ' + c.blocker + ')' : ''}`
+  ).join('\n')
 
-  const prompt = `You are an honest productivity coach reviewing someone's week.
+  const prompt = `You are an honest productivity coach giving a weekly review. Be direct — no generic praise.
 
 Goal: "${goal.title}"${goal.desc ? `. Context: "${goal.desc}"` : ''}.
 Tasks completed: ${doneTasks}/${totalTasks} (${pct}%).
-Current streak: ${streak} days.
-Check-ins this week:
+Streak: ${streak} days.
+Check-ins:
 ${moodSummary || 'No check-ins this week.'}
 
-Write a weekly review in exactly this JSON format, no markdown, no extra text:
-{"rating":"Good|OK|Needs work","summary":"2 sentences on overall week performance","wentWell":"1 specific thing that went well","improve":"1 specific thing to improve","nextWeekFocus":"one concrete actionable focus for next week","encouragement":"one short motivating closing sentence"}`
+Apply these principles in your review:
+- If stuck with no progress: is this a Valley or a Dead End? Say it directly.
+- Identify if they are building accumulable skills or just doing disposable tasks.
+- Celebrate real wins, not just effort.
+
+Return ONLY valid JSON, no markdown:
+{"rating":"Good|OK|Needs work","summary":"2 honest sentences on the week","wentWell":"1 specific concrete win","improve":"1 specific thing to change, not vague","nextWeekFocus":"one concrete actionable focus","encouragement":"one direct sentence — no fluff","mindsetNote":"one sentence applying Valley/Dead End or Accumulable Asset or Three-Wins to their specific situation"}`
 
   const resp = await callAI(prompt)
   return parseJSON(resp)
 }
 
 export async function generateTasks(goal, userPrompt = '') {
-  const prompt = `You are a productivity coach.
-Goal: "${goal.title}".${goal.desc ? ` Why it matters: "${goal.desc}".` : ''}${goal.weeks ? ` Timeline: ${goal.weeks} weeks.` : ''}
-${userPrompt ? `User wants tasks focused on: "${userPrompt}".` : ''}
+  const prompt = `You are a productivity coach generating starter tasks.
 
-Generate exactly 7 specific tasks. Return ONLY valid JSON, no markdown:
-{"tasks":[{"text":"specific task","estimatedMins":30,"day":"Mon"}]}
+Goal: "${goal.title}"${goal.desc ? `. Why it matters: "${goal.desc}"` : ''}${goal.weeks ? `. Timeline: ${goal.weeks} weeks` : ''}.
+${userPrompt ? `User focus: "${userPrompt}".` : ''}
+
+Generate exactly 7 tasks that build toward the goal. Each task must be an accumulable action — something that builds a skill or habit, not a one-off.
+
+Return ONLY valid JSON, no markdown:
+{"tasks":[{"text":"specific task naming exact tool or action","estimatedMins":30,"day":"Mon"}]}
 
 Rules:
-- Each task must name a specific resource, tool, or action
-- Bad: "Study grammar" — Good: "Complete Duolingo lesson 1 and write 5 example sentences"
-- Spread across Mon-Sun, one task per day
-- estimatedMins between 20-45
-- Order from easiest to hardest
-- Tasks must be completable in one sitting`
+- Name exact resources, tools, or actions (not vague verbs)
+- Bad: "Study grammar" — Good: "Complete Duolingo Unit 1 Lesson 3 and write 5 example sentences"
+- One task per day, spread Mon-Sun
+- estimatedMins 20-45
+- Easiest first, hardest last
+- Each completable in one sitting`
 
   const resp = await callAI(prompt)
   return parseJSON(resp)
 }
 
 export async function breakdownProject(title, goal) {
-  const prompt = `You are a productivity coach. 
-Goal: "${goal.title}". Project task: "${title}".
+  const prompt = `You are a productivity coach breaking down a project into steps.
 
-Break this project into 5-8 specific sub-tasks. Return ONLY valid JSON, no markdown:
+Goal: "${goal.title}". Project: "${title}".
+
+Apply the Accumulable Asset principle: order sub-tasks so each one builds on the last and produces something usable.
+
+Return ONLY valid JSON, no markdown:
 {"subtasks":[{"text":"specific sub-task"}]}
 
 Rules:
-- Sub-tasks must be very specific and actionable
-- Order them logically from first to last
-- Each sub-task should take 15-60 minutes`
+- 5-8 sub-tasks
+- Each names a specific action or deliverable
+- Ordered logically — each step builds on the previous
+- Each completable in 15-60 minutes`
 
   const resp = await callAI(prompt)
   return parseJSON(resp)
 }
 
 export async function generateRescueTask(goal, streak, checkins) {
-  const prompt = `User goal: "${goal.title}". They missed a check-in and their ${streak} day streak is at risk.
-Recent mood: ${checkins[0]?.moodLabel || 'unknown'}.
+  const recentBlockers = checkins.slice(0, 3).map(c => c.blocker).filter(Boolean).join(', ')
 
-Generate ONE very easy rescue task they can do RIGHT NOW in under 15 minutes to save their streak.
-Return ONLY valid JSON: {"task":"specific task under 10 words","estimatedMins":10,"encouragement":"one motivating sentence"}`
+  const prompt = `You are a direct productivity coach. User goal: "${goal.title}". Their ${streak}-day streak is at risk.
+Recent mood: ${checkins[0]?.moodLabel || 'unknown'}.
+Recent blockers: ${recentBlockers || 'none mentioned'}.
+
+Apply Valley vs Dead End:
+- If they seem in a valley (effort exists, just lost momentum): generate a rescue task.
+- If they seem stuck at a dead end (same blockers repeating, no progress pattern): generate a reflection prompt instead.
+
+Return ONLY valid JSON:
+{"type":"rescue|reflect","task":"specific task or reflection question under 15 words","estimatedMins":10,"encouragement":"one direct sentence — no empty motivation"}`
 
   const resp = await callAI(prompt)
   return parseJSON(resp)
@@ -165,77 +211,81 @@ Return ONLY valid JSON: {"task":"specific task under 10 words","estimatedMins":1
 
 export async function summariseChat(messages) {
   const history = messages.map(m => `${m.role === 'user' ? 'User' : 'Coach'}: ${m.text}`).join('\n')
-  const prompt = `Summarise this coaching conversation in 3-5 bullet points. Focus on: what the user is working on, key challenges mentioned, advice given, and any commitments made. Be concise.
+
+  const prompt = `Summarise this coaching conversation in 3-5 bullet points.
+Focus on: what the user is working toward, key challenges or blockers mentioned, advice given, commitments made, and any open loops.
+Be specific — capture actual content, not generic descriptions.
 
 Conversation:
 ${history}
 
-Return ONLY a plain text summary, no JSON, no markdown headers.`
+Return ONLY plain text bullet points. No JSON, no headers, no markdown.`
 
   const resp = await callAI(prompt)
   return resp.trim()
 }
 
 export async function extractMemory(currentMemory, transcript) {
-  const prompt = `You are a memory extraction assistant for a coaching app.
-
-You will be given:
-1. The user's current memory object (JSON)
-2. A conversation transcript from this session
-
-Your job is to update the memory object to reflect anything new learned in this conversation. Follow these rules:
-- Add or update goals if new ones were mentioned or existing ones changed
-- Update goal progress and blockers based on what was discussed
-- Add to recentWins if the user reported completing or achieving something
-- Add to openLoops if the user mentioned something unresolved or intended but didn't commit to
-- Remove from openLoops if something was resolved
-- Update patterns only if there is strong evidence — don't change these lightly
-- Add a new entry to sessionHistory with today's date, a one-sentence summary, and any explicit commitments the user made
-- Update lastUpdated to today's date
-- Do not invent facts. Only record things clearly stated or strongly implied.
-- If nothing relevant was said, return the object unchanged.
-
-Return ONLY the updated JSON object. No explanation, no markdown.
+  const prompt = `You are a memory extraction assistant for a coaching app. Be precise — only record what was clearly stated.
 
 Current memory:
 ${JSON.stringify(currentMemory, null, 2)}
 
 Conversation transcript:
-${transcript}`
+${transcript}
+
+Update the memory following these rules:
+- Add/update goals only if explicitly mentioned with new information
+- Update progress and blockers based on what was discussed
+- Add to recentWins only if user reported a real achievement
+- Add to openLoops if user mentioned something unresolved or intended but uncommitted
+- Remove from openLoops if it was resolved in this conversation
+- Update patterns (strengths/struggles/whatWorks/whatDoesnt) only with strong evidence — minimum 2 data points
+- Add sessionHistory entry: today's date, one-sentence summary, explicit commitments only
+- Update lastUpdated to today
+- Do NOT invent or infer — only record clearly stated facts
+
+Return ONLY the updated JSON object. No explanation, no markdown.`
 
   const resp = await callAI(prompt, [])
   return parseJSON(resp)
 }
 
-const WELCOME = (goal) => `Hi! I'm your coach for "${goal.title}". I remember our past conversations and learn about you over time. Ask me anything.`
-
-
 export async function chat(messages, goal, checkins, tasks, memory = null) {
   const lastMessage = messages[messages.length - 1]?.text || ''
-  const detectedTools = detectTools(lastMessage)  // detect here
+  const tools = detectTools(lastMessage)
 
-  const systemPrompt = `...` // unchanged
+  const memoryBlock = memory ? `
+--- USER MEMORY ---
+${formatMemoryForPrompt(memory)}
+--- END MEMORY ---
+Use this naturally. Don't recite it. Reference open loops and past commitments when relevant. Notice patterns.
+` : ''
 
-  const conversationMessages = [
-    { role: 'system', content: systemPrompt },
-    ...messages
-      .filter(m => !(m.role === 'assistant' && m.text === WELCOME(goal)))
-      .slice(-20)
-      .map(m => ({
-        role: m.role === 'user' ? 'user' : 'assistant',
-        content: m.text
-      }))
-  ]
+  const taskContext = `Tasks done: ${tasks.filter(t => t.done).length}/${tasks.length}.${
+    tasks.filter(t => t.done).length === 0 && tasks.length > 0 ? ' (no tasks completed yet — worth addressing)' : ''
+  }`
 
-  const resp = await fetch('/api/generate-plan', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ 
-      messages: conversationMessages,
-      tools: detectedTools   // ← add this
-    })
-  })
-  const d = await resp.json()
-  if (!resp.ok) throw new Error(d.error || 'API error')
-  return { text: d.text || '' }
+  const checkinContext = checkins.length > 0
+    ? `Recent check-ins:\n${checkins.slice(0, 5).map(c => `${c.date}: ${c.moodLabel}${c.what ? ' — ' + c.what : ''}${c.blocker ? ' (blocker: ' + c.blocker + ')' : ''}`).join('\n')}`
+    : 'No check-ins yet.'
+
+  const context = `You are a dedicated productivity coach inside the Momentum app.
+${memoryBlock}
+${MINDSET}
+
+Current goal: "${goal.title}"${goal.desc ? `. Why it matters: "${goal.desc}"` : ''}.
+${taskContext}
+${checkinContext}
+
+${COACHING_STYLE}
+Max 3 sentences unless the user explicitly asks for more detail.`
+
+  const history = messages
+    .slice(-20)
+    .map(m => `${m.role === 'user' ? 'User' : 'Coach'}: ${m.text}`)
+    .join('\n')
+
+  const resp = await callAI(`${context}\n\nConversation:\n${history}\nCoach:`, tools)
+  return { text: resp.trim() }
 }
