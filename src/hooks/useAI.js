@@ -91,15 +91,24 @@ Return ONLY valid JSON, no markdown:
 
 Rules:
 - All 7 days Mon-Sun
-- Each task names a specific resource, tool, or action (not vague verbs)
-- Bad: "Practice speaking" — Good: "Record a 2-min voice memo in the target language and replay it"
-- Difficulty ramps up with week number
-- If mood trend is low: tasks under 20 min, very easy wins
-- estimatedMins between 15-60
-- Week theme should reflect the skill being built this week`
+- Each task names a specific resource, tool, or action
+- Bad: "Practice speaking" — Good: "Record a 2-min voice memo and replay it"
+- Difficulty ramps with week number
+- If mood trend is low: tasks under 20 min
+- estimatedMins between 15-60`
 
-  const resp = await callAI(prompt)
-  return parseJSON(resp)
+  const raw = await callAI(prompt)
+  const draft = parseJSON(raw)
+
+  const criteria = `
+- every task must name a specific resource, tool, or measurable action
+- no vague verbs like "study", "practice", "review" without saying exactly what
+- tasks should get harder from Mon to Sun
+- estimatedMins should be realistic for the task described
+- weekTheme should reflect the actual skill being built, not generic motivation`
+
+  const improved = await reflectAndImprove(draft, criteria, 2)
+  return typeof improved === 'string' ? parseJSON(improved) : improved
 }
 
 export async function autoAdjustPlan(goal, plan, checkins) {
@@ -136,16 +145,27 @@ Streak: ${streak} days.
 Check-ins:
 ${moodSummary || 'No check-ins this week.'}
 
-Apply these principles in your review:
-- If stuck with no progress: is this a Valley or a Dead End? Say it directly.
+Apply these principles:
+- If stuck with no progress: is this a Valley or Dead End? Say it directly.
 - Identify if they are building accumulable skills or just doing disposable tasks.
 - Celebrate real wins, not just effort.
 
 Return ONLY valid JSON, no markdown:
-{"rating":"Good|OK|Needs work","summary":"2 honest sentences on the week","wentWell":"1 specific concrete win","improve":"1 specific thing to change, not vague","nextWeekFocus":"one concrete actionable focus","encouragement":"one direct sentence — no fluff","mindsetNote":"one sentence applying Valley/Dead End or Accumulable Asset or Three-Wins to their specific situation"}`
+{"rating":"Good|OK|Needs work","summary":"2 honest sentences","wentWell":"1 specific concrete win","improve":"1 specific thing to change","nextWeekFocus":"one concrete actionable focus","encouragement":"one direct sentence","mindsetNote":"one sentence applying Valley/Dead End or Accumulable Asset or Three-Wins to their specific situation"}`
 
-  const resp = await callAI(prompt)
-  return parseJSON(resp)
+  const raw = await callAI(prompt)
+  const draft = parseJSON(raw)
+
+  const criteria = `
+- rating must match the actual data (${pct}% completion, ${streak} day streak)
+- summary must reference specific numbers or events, not generic statements
+- wentWell must name something concrete, not "you showed up"
+- improve must be actionable, not vague like "be more consistent"
+- mindsetNote must apply a specific principle to THIS user's situation, not generic advice
+- no empty motivation or filler phrases`
+
+  const improved = await reflectAndImprove(draft, criteria, 2)
+  return typeof improved === 'string' ? parseJSON(improved) : improved
 }
 
 export async function generateTasks(goal, userPrompt = '') {
@@ -154,21 +174,30 @@ export async function generateTasks(goal, userPrompt = '') {
 Goal: "${goal.title}"${goal.desc ? `. Why it matters: "${goal.desc}"` : ''}${goal.weeks ? `. Timeline: ${goal.weeks} weeks` : ''}.
 ${userPrompt ? `User focus: "${userPrompt}".` : ''}
 
-Generate exactly 7 tasks that build toward the goal. Each task must be an accumulable action — something that builds a skill or habit, not a one-off.
+Generate exactly 7 tasks that build toward the goal. Each task must be an accumulable action.
 
 Return ONLY valid JSON, no markdown:
 {"tasks":[{"text":"specific task naming exact tool or action","estimatedMins":30,"day":"Mon"}]}
 
 Rules:
-- Name exact resources, tools, or actions (not vague verbs)
+- Name exact resources, tools, or actions
 - Bad: "Study grammar" — Good: "Complete Duolingo Unit 1 Lesson 3 and write 5 example sentences"
 - One task per day, spread Mon-Sun
 - estimatedMins 20-45
-- Easiest first, hardest last
-- Each completable in one sitting`
+- Easiest first, hardest last`
 
-  const resp = await callAI(prompt)
-  return parseJSON(resp)
+  const raw = await callAI(prompt)
+  const draft = parseJSON(raw)
+
+  const criteria = `
+- every task text must name a specific tool, resource, or measurable deliverable
+- no task should use vague verbs without specifying exactly what
+- tasks must be ordered easiest to hardest
+- each task must be completable in one sitting
+- estimatedMins must be realistic`
+
+  const improved = await reflectAndImprove(draft, criteria, 2)
+  return typeof improved === 'string' ? parseJSON(improved) : improved
 }
 
 export async function breakdownProject(title, goal) {
@@ -288,4 +317,42 @@ Max 3 sentences unless the user explicitly asks for more detail.`
 
   const resp = await callAI(`${context}\n\nConversation:\n${history}\nCoach:`, tools)
   return { text: resp.trim() }
+}
+
+async function reflectAndImprove(output, criteria, maxIterations = 2) {
+  let current = output
+  for (let i = 0; i < maxIterations; i++) {
+    const critiquePrompt = `You are a quality reviewer for a coaching app.
+
+Review this output against these criteria:
+${criteria}
+
+Output to review:
+${typeof current === 'string' ? current : JSON.stringify(current, null, 2)}
+
+Is this output good enough? Be strict.
+Return ONLY valid JSON:
+{"pass":true|false,"issues":["issue 1","issue 2"],"suggestions":["improvement 1"]}`
+
+    const critiqueResp = await callAI(critiquePrompt, [])
+    let critique
+    try { critique = parseJSON(critiqueResp) } catch { break }
+
+    if (critique.pass) break
+
+    const rewritePrompt = `You are a productivity coach. Rewrite the following output to fix these issues:
+Issues: ${critique.issues.join(', ')}
+Suggestions: ${critique.suggestions.join(', ')}
+
+Original output:
+${typeof current === 'string' ? current : JSON.stringify(current, null, 2)}
+
+Return ONLY the improved output in the same format. No explanation, no markdown.`
+
+    const rewritten = await callAI(rewritePrompt, [])
+    try {
+      current = typeof current === 'string' ? rewritten.trim() : parseJSON(rewritten)
+    } catch { break }
+  }
+  return current
 }
