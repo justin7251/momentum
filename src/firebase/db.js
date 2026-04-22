@@ -12,9 +12,57 @@ export const checkinsRef = (uid, goalId) => collection(db, 'users', uid, 'goals'
 export const addGoal = (uid, data) => addDoc(goalsRef(uid), { ...data, createdAt: serverTimestamp() })
 export const addTask = (uid, goalId, data) => addDoc(tasksRef(uid, goalId), { ...data, done: false, createdAt: serverTimestamp() })
 export const updateTask = (uid, goalId, taskId, data) => updateDoc(doc(db, 'users', uid, 'goals', goalId, 'tasks', taskId), data)
-export const deleteTask = (uid, goalId, taskId) => deleteDoc(doc(db, 'users', uid, 'goals', goalId, 'tasks', taskId))
-export const addCheckin = (uid, goalId, data) => addDoc(checkinsRef(uid, goalId), { ...data, createdAt: serverTimestamp() })
+export const completeTask = (uid, goalId, taskId, extraFields = {}) =>
+  updateDoc(doc(db, 'users', uid, 'goals', goalId, 'tasks', taskId), {
+    done: true,
+    completedAt: serverTimestamp(),
+    ...extraFields
+  })
 
+export const uncompleteTask = (uid, goalId, taskId) =>
+  updateDoc(doc(db, 'users', uid, 'goals', goalId, 'tasks', taskId), {
+    done: false,
+    completedAt: null
+  })
+export const deleteTask = (uid, goalId, taskId) => deleteDoc(doc(db, 'users', uid, 'goals', goalId, 'tasks', taskId))
+export const addCheckin = async (uid, goalId, data) => {
+  const ref = await addDoc(checkinsRef(uid, goalId), { ...data, createdAt: serverTimestamp() })
+
+  const weekStart = getWeekStart()
+  const moodAggRef = doc(db, 'users', uid, 'goals', goalId, 'moodAggregates', weekStart)
+  const snap = await getDoc(moodAggRef)
+
+  if (snap.exists()) {
+    const existing = snap.data()
+    const newCount = existing.count + 1
+    const newAvg = ((existing.avgMood * existing.count) + data.mood) / newCount
+    await updateDoc(moodAggRef, {
+      count: newCount,
+      avgMood: Math.round(newAvg * 10) / 10,
+      moods: [...(existing.moods || []), { date: data.date, mood: data.mood }],
+      updatedAt: serverTimestamp()
+    })
+  } else {
+    await setDoc(moodAggRef, {
+      weekStart,
+      count: 1,
+      avgMood: data.mood,
+      moods: [{ date: data.date, mood: data.mood }],
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    })
+  }
+
+  return ref
+}
+
+function getWeekStart() {
+  const d = new Date()
+  const day = d.getDay()
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1)
+  d.setDate(diff)
+  return d.toISOString().split('T')[0]
+}
 export const projectsRef = (uid, goalId) => collection(db, 'users', uid, 'goals', goalId, 'projects')
 export const addProject = (uid, goalId, data) => addDoc(projectsRef(uid, goalId), { ...data, done: false, createdAt: serverTimestamp() })
 export const updateProject = (uid, goalId, projectId, data) => updateDoc(doc(db, 'users', uid, 'goals', goalId, 'projects', projectId), data)

@@ -70,3 +70,15 @@ export function useGoalProgress(uid, goalId) {
   }, [uid, goalId])
   return progress
 }
+
+export function useMoodAggregates(uid, goalId) {
+  const [aggregates, setAggregates] = useState([])
+  useEffect(() => {
+    if (!uid || !goalId) return
+    return onSnapshot(
+      query(collection(db, 'users', uid, 'goals', goalId, 'moodAggregates'), orderBy('weekStart', 'desc')),
+      snap => setAggregates(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+    )
+  }, [uid, goalId])
+  return aggregates
+}

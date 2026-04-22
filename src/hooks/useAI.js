@@ -288,27 +288,35 @@ export async function chat(messages, goal, checkins, tasks, memory = null) {
 --- USER MEMORY ---
 ${formatMemoryForPrompt(memory)}
 --- END MEMORY ---
-Use this naturally. Don't recite it. Reference open loops and past commitments when relevant. Notice patterns.
+Use this naturally. Don't recite it. Reference open loops and past commitments when relevant.
 ` : ''
 
   const taskContext = `Tasks done: ${tasks.filter(t => t.done).length}/${tasks.length}.${
-    tasks.filter(t => t.done).length === 0 && tasks.length > 0 ? ' (no tasks completed yet — worth addressing)' : ''
+    tasks.filter(t => t.done).length === 0 && tasks.length > 0 ? ' (no tasks completed yet)' : ''
   }`
 
   const checkinContext = checkins.length > 0
-    ? `Recent check-ins:\n${checkins.slice(0, 5).map(c => `${c.date}: ${c.moodLabel}${c.what ? ' — ' + c.what : ''}${c.blocker ? ' (blocker: ' + c.blocker + ')' : ''}`).join('\n')}`
+    ? `Recent check-ins:\n${checkins.slice(0, 3).map(c => `${c.date}: ${c.moodLabel}${c.blocker ? ' — blocker: ' + c.blocker : ''}`).join('\n')}`
     : 'No check-ins yet.'
 
-  const context = `You are a dedicated productivity coach inside the Momentum app.
+  const context = `You are a direct productivity coach in the Momentum app.
 ${memoryBlock}
 ${MINDSET}
 
-Current goal: "${goal.title}"${goal.desc ? `. Why it matters: "${goal.desc}"` : ''}.
+Goal: "${goal.title}"${goal.desc ? `. Context: "${goal.desc}"` : ''}.
 ${taskContext}
 ${checkinContext}
 
-${COACHING_STYLE}
-Max 3 sentences unless the user explicitly asks for more detail.`
+RESPONSE RULES — follow strictly:
+- Max 3 sentences for simple questions
+- Max 5 sentences for complex questions
+- If listing items: max 4 items, each one line only
+- No bold headers like **Exercise 1:** or **Critical Thinking:**
+- No nested bullet points
+- No preamble like "Here are some..." or "Great question!"
+- Start your response directly with the answer
+- Use plain conversational language
+- If asked for exercises or steps: number them simply (1. 2. 3.) — no headers`
 
   const history = messages
     .slice(-20)
