@@ -10,7 +10,7 @@ const EXTRACT_EVERY = 10
 
 const WELCOME = (goal) => `Hi! I'm your coach for "${goal.title}". I remember our past conversations and learn about you over time. Ask me anything.`
 
-export default function ChatAssistant({ uid, goalId, goal, checkins, tasks }) {
+export default function ChatAssistant({ uid, goalId, goal, checkins, tasks, userData }) {
   const { c } = useTheme()
   const [messages, setMessages] = useState(null)
   const [summary, setSummary] = useState(null)
@@ -39,9 +39,16 @@ export default function ChatAssistant({ uid, goalId, goal, checkins, tasks }) {
         setMessages([{ role: 'assistant', text: WELCOME(goal), ts: new Date().toISOString() }])
       }
       if (memSnap.exists()) {
-        setMemory(memSnap.data())
+        const memData = memSnap.data()
+        if (!memData.profile?.name && userData?.name) {
+          const seeded = { ...memData, profile: { ...memData.profile, name: userData.name } }
+          await saveMemory(uid, seeded)
+          setMemory(seeded)
+        } else {
+          setMemory(memData)
+        }
       } else {
-        const fresh = defaultMemory(uid)
+        const fresh = { ...defaultMemory(uid), profile: { name: userData?.name || '', motivationStyle: '', communicationStyle: '' } }
         await saveMemory(uid, fresh)
         setMemory(fresh)
       }
@@ -49,6 +56,49 @@ export default function ChatAssistant({ uid, goalId, goal, checkins, tasks }) {
       setMessages([{ role: 'assistant', text: WELCOME(goal), ts: new Date().toISOString() }])
     }
     setLoadingHistory(false)
+  }
+  
+  function MessageText({ text, isUser }) {
+    const lines = text.split('\n').filter(l => l.trim())
+
+    const parsed = lines.map(line => {
+      const trimmed = line.trim()
+      const numbered = trimmed.match(/^(\d+)\.\s+(.+)/)
+      const bullet = trimmed.match(/^[-•*]\s+(.+)/)
+      const clean = trimmed
+        .replace(/\*\*(.*?)\*\*/g, '$1')
+        .replace(/\*(.*?)\*/g, '$1')
+        .replace(/#{1,3}\s/g, '')
+
+      if (numbered) return { type: 'numbered', num: numbered[1], text: numbered[2].replace(/\*\*(.*?)\*\*/g, '$1') }
+      if (bullet) return { type: 'bullet', text: bullet[1].replace(/\*\*(.*?)\*\*/g, '$1') }
+      if (clean) return { type: 'text', text: clean }
+      return null
+    }).filter(Boolean)
+
+    const color = isUser ? '#fff' : 'inherit'
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {parsed.map((item, i) => {
+          if (item.type === 'numbered') return (
+            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color, opacity: 0.7, flexShrink: 0, minWidth: 16, paddingTop: 1 }}>{item.num}.</span>
+              <span style={{ fontSize: 13, lineHeight: 1.5, color }}>{item.text}</span>
+            </div>
+          )
+          if (item.type === 'bullet') return (
+            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+              <span style={{ fontSize: 10, color, opacity: 0.5, flexShrink: 0, paddingTop: 3 }}>●</span>
+              <span style={{ fontSize: 13, lineHeight: 1.5, color }}>{item.text}</span>
+            </div>
+          )
+          return (
+            <p key={i} style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color }}>{item.text}</p>
+          )
+        })}
+      </div>
+    )
   }
 
   const compressIfNeeded = async (msgs) => {
@@ -155,8 +205,8 @@ export default function ChatAssistant({ uid, goalId, goal, checkins, tasks }) {
               color: m.role === 'user' ? '#fff' : c.accentText,
               fontSize: 13, lineHeight: 1.6
             }}>
-              {m.text}
-              <div style={{ fontSize: 10, opacity: 0.4, marginTop: 4 }}>
+              <MessageText text={m.text} isUser={m.role === 'user'} />
+              <div style={{ fontSize: 10, opacity: 0.4, marginTop: 6, textAlign: m.role === 'user' ? 'right' : 'left' }}>
                 {m.ts ? new Date(m.ts).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ''}
               </div>
             </div>
