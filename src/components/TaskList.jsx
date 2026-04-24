@@ -6,11 +6,10 @@ import {
   SortableContext, verticalListSortingStrategy, useSortable, arrayMove
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { addTask, updateTask, deleteTask } from '../firebase/db'
+import { addTask, updateTask, deleteTask, completeTask, uncompleteTask, autoCheckin } from '../firebase/db'
 import { useTheme } from '../hooks/useTheme'
 import { generateTasks } from '../hooks/useAI'
 import { useOnlineStatus } from '../hooks/useOnlineStatus'
-import { autoCheckin } from '../firebase/db'
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const DAY_ORDER = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -207,9 +206,18 @@ export default function TaskList({ uid, goalId, tasks, goal }) {
   const handleToggle = async (task) => {
     const nowDone = !task.done
     if (task.recur) {
-      await updateTask(uid, goalId, task.id, { done: nowDone, lastDone: todayStr() })
+      if (nowDone) {
+        await completeTask(uid, goalId, task.id, task.recur ? { lastDone: todayStr() } : {})
+        await updateTask(uid, goalId, task.id, { lastDone: todayStr() })
+      } else {
+        await uncompleteTask(uid, goalId, task.id)
+      }
     } else {
-      await updateTask(uid, goalId, task.id, { done: nowDone })
+      if (nowDone) {
+        await completeTask(uid, goalId, task.id)
+      } else {
+        await uncompleteTask(uid, goalId, task.id)
+      }
     }
     if (nowDone) await autoCheckin(uid, goalId)
   }
