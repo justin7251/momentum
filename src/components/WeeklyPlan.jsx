@@ -33,7 +33,18 @@ export default function WeeklyPlan({ uid, goal, checkins }) {
     setLoading(true)
     try {
       const generated = await generateWeeklyPlan(goal, weekNum, checkins)
-      await setDoc(planRef, { plan: generated, weekNum, adjustNote: null, updatedAt: new Date().toISOString() })
+      await setDoc(planRef, {
+        plan: generated,
+        weekNum,
+        adjustNote: null,
+        updatedAt: new Date().toISOString(),
+        adherence: {
+          generated: generated.days.length,
+          completed: 0,
+          weekNum,
+          weekStart: getWeekStartStr()
+        }
+      })
       setPlan(generated)
       setAdjustNote(null)
     } catch (e) { console.error(e) }
@@ -83,13 +94,24 @@ export default function WeeklyPlan({ uid, goal, checkins }) {
     setLoading(false)
   }
 
+  const incrementAdherence = async () => {
+    const snap = await getDoc(planRef)
+    if (!snap.exists()) return
+    const data = snap.data()
+    const current = data.adherence?.completed || 0
+    await updateDoc(planRef, { 'adherence.completed': current + 1 })
+  }
+
   const handleSaveOneTask = async (day) => {
     setLoading(true)
     try {
       await addTask(uid, goal.id, {
         text: `[${day.day}] ${day.task}`,
-        estimatedMins: day.estimatedMins
+        estimatedMins: day.estimatedMins,
+        fromPlan: true,
+        planWeek: weekNum
       })
+      await incrementAdherence()
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
     } catch (e) { console.error(e) }
@@ -110,6 +132,14 @@ export default function WeeklyPlan({ uid, goal, checkins }) {
       </button>
     </div>
   )
+
+  function getWeekStartStr() {
+    const d = new Date()
+    const day = d.getDay()
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1)
+    d.setDate(diff)
+    return d.toISOString().split('T')[0]
+  }
 
   return (
     <div>
