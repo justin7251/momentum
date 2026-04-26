@@ -69,7 +69,7 @@ export default function GoalDetail({ uid, goal, userData, onBack }) {
               ? <WeeklyReview goal={goal} tasks={tasks} checkins={checkins} streak={streak} />
               : <UpgradePrompt c={c} />
           )}
-          {tab === 5 && <ChatAssistant uid={uid} goalId={goal.id} goal={goal} checkins={checkins} tasks={tasks} />}
+          {tab === 5 && <ChatAssistant uid={uid} goalId={goal.id} goal={goal} checkins={checkins} tasks={tasks} userData={userData} />}
           {tab === 6 && <Log checkins={checkins} c={c} />}
         </div>
       </div>
