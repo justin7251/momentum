@@ -5,6 +5,7 @@ import { useUser } from './hooks/useUser'
 import { requestPermission } from './hooks/useNotifications'
 import { useOnlineStatus } from './hooks/useOnlineStatus'
 import Login from './pages/Login'
+import Today from './pages/Today'
 import GoalList from './pages/GoalList'
 import GoalDetail from './pages/GoalDetail'
 import Onboarding from './pages/Onboarding'
@@ -20,6 +21,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false)
   const [onboarded, setOnboarded] = useState(() => localStorage.getItem('onboarded') === 'true')
   const [showCalendar, setShowCalendar] = useState(false)
+  const [showGoals, setShowGoals] = useState(false)
 
   useEffect(() => {
     if (user) requestPermission(user.uid)
@@ -45,16 +47,32 @@ export default function App() {
   const content = (() => {
     if (showSettings) return <Settings user={user} userData={userData} onBack={() => setShowSettings(false)} onLogout={logout} />
     if (showCalendar) return <Calendar uid={user.uid} goals={goals || []} onBack={() => setShowCalendar(false)} />
-    if (selected) return <GoalDetail uid={user.uid} goal={selected} userData={userData} onBack={() => setSelected(null)} />
-
-    return (
+    if (showGoals) return (
       <GoalList
         uid={user.uid}
         goals={goals}
-        onSelect={setSelected}
+        onSelect={(g) => { setSelected(g); setShowGoals(false) }}
         onLogout={logout}
         onSettings={() => setShowSettings(true)}
         onCalendar={() => setShowCalendar(true)}
+        onBack={() => setShowGoals(false)}
+      />
+    )
+    if (selected) return (
+      <GoalDetail
+        uid={user.uid}
+        goal={selected}
+        userData={userData}
+        onBack={() => setSelected(null)}
+      />
+    )
+    return (
+      <Today
+        uid={user.uid}
+        goals={goals || []}
+        userData={userData}
+        onGoals={() => setShowGoals(true)}
+        onSettings={() => setShowSettings(true)}
       />
     )
   })()

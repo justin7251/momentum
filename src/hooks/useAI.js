@@ -364,3 +364,22 @@ Return ONLY the improved output in the same format. No explanation, no markdown.
   }
   return current
 }
+
+export async function callDailyFocus(goal, checkins, tasks) {
+  const doneTasks = tasks.filter(t => t.done).length
+  const recentMood = checkins[0]?.moodLabel || 'unknown'
+  const prompt = `You are a productivity coach. Student goal: "${goal.title}".
+Tasks done: ${doneTasks}/${tasks.length}. Recent mood: ${recentMood}.
+Give ONE specific focus sentence for today — what should they work on right now?
+Max 15 words. Be direct and specific. No preamble.`
+  return await callAI(prompt, [])
+}
+
+export async function generateCheckinResponse(goal, mood, note, streak, tasks) {
+  const moodLabel = ['Tired','Meh','OK','Good','Great'][mood]
+  const prompt = `You are an encouraging coach. Student goal: "${goal.title}".
+Mood: ${moodLabel}. They wrote: "${note || 'nothing'}". Streak: ${streak} days.
+Write ONE encouraging sentence acknowledging their mood and effort. 
+Be specific to what they wrote. Max 20 words. Warm but not cheesy.`
+  return await callAI(prompt, [])
+}
